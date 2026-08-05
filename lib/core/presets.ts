@@ -1,0 +1,248 @@
+import type { PresetGroupId, PresetOption } from './types';
+
+/**
+ * The preset Prompt library.
+ *
+ * Every button in the Side Panel maps to exactly one preset id here. The plugin
+ * never generates or rewrites these texts at runtime — they are authored,
+ * hand-tested and versioned by the developer. The compiler simply looks them up
+ * by id and concatenates them in a fixed order. See lib/core/compiler.ts.
+ */
+
+export const PRESET_LIBRARY_VERSION = 1;
+
+/**
+ * Step 1 of every compiled message: state that the material was hand-selected
+ * by the user and ask for output that reads independently of the original chat.
+ */
+export const BASE_TASK_PROMPT =
+  '请根据下方由用户主动筛选并整理的 AI 对话片段生成最终内容。' +
+  '这些材料已由用户手动挑选，请只依据这些材料进行整理，不要引入材料之外的内容，' +
+  '并生成可以脱离原始对话、独立阅读的结果。';
+
+/** 输出用途（单选）——本次要生成的东西是什么。 */
+export const INTENT_PRESETS: PresetOption[] = [
+  {
+    id: 'intent.quick-review',
+    name: '快速回顾',
+    group: 'intent',
+    version: 1,
+    hint: '简洁重述要点，方便快速回忆',
+    text: '本次输出用途是快速回顾：用简洁的方式重述讨论要点，帮助用户在短时间内回忆本次对话的核心内容，不需要展开细节。',
+  },
+  {
+    id: 'intent.dense-notes',
+    name: '高密度笔记',
+    group: 'intent',
+    version: 1,
+    hint: '信息密集、可长期查阅',
+    text: '本次输出用途是高密度笔记：整理为信息密集、可长期查阅的笔记，去除对话性冗余，保留可复用的结论与依据。',
+  },
+  {
+    id: 'intent.study',
+    name: '学习版本',
+    group: 'intent',
+    version: 1,
+    hint: '突出定义、步骤、示例、误区',
+    text: '本次输出用途是学习版本：面向学习者整理，突出定义、原因、步骤、示例与常见误区，便于理解、记忆与复习。',
+  },
+  {
+    id: 'intent.research-log',
+    name: '研究记录',
+    group: 'intent',
+    version: 1,
+    hint: '保留观点演变与未解决问题',
+    text: '本次输出用途是研究记录：保留观点的演变、证据、反例与未解决问题，作为可追溯的研究过程记录，而不是给出定论。',
+  },
+  {
+    id: 'intent.handoff',
+    name: '对话续接',
+    group: 'intent',
+    version: 1,
+    hint: '可直接发给新对话的上下文',
+    text: '本次输出用途是对话续接：整理为可以直接发送给新对话的上下文，包含目标、已知背景、已完成内容、关键决定与剩余任务。',
+  },
+];
+
+/** 知识密度（单选）——细节保留和解释深度。density.high 文本沿用计划书原文。 */
+export const DENSITY_PRESETS: PresetOption[] = [
+  {
+    id: 'density.low',
+    name: '低',
+    group: 'density',
+    version: 1,
+    hint: '只留核心，删细节',
+    text: '知识密度为低：保留核心结论和必要解释，减少细节、例子和延伸内容。',
+  },
+  {
+    id: 'density.medium',
+    name: '中',
+    group: 'density',
+    version: 1,
+    hint: '结论 + 主要逻辑 + 代表性示例',
+    text: '知识密度为中：保留核心结论、主要逻辑、必要解释和代表性示例。',
+  },
+  {
+    id: 'density.high',
+    name: '高',
+    group: 'density',
+    version: 1,
+    hint: '压缩重复，尽量不丢信息',
+    text: '知识密度为高：在删除重复内容的同时，尽可能保留专业术语、关键逻辑、重要条件、例外情况和必要示例。',
+  },
+];
+
+/** 文风（单选）——语言专业程度与表达方式。 */
+export const STYLE_PRESETS: PresetOption[] = [
+  {
+    id: 'style.professional',
+    name: '专业直接',
+    group: 'writingStyle',
+    version: 1,
+    hint: '直陈要点，少过渡句',
+    text: '语言风格为专业、直接：减少无意义的过渡句和对话性表达，直接陈述要点。',
+  },
+  {
+    id: 'style.readable',
+    name: '自然易读',
+    group: 'writingStyle',
+    version: 1,
+    hint: '平实句子，降低阅读负担',
+    text: '语言风格为自然、易读：使用平实、连贯的句子，在保留信息的同时降低阅读负担。',
+  },
+  {
+    id: 'style.academic',
+    name: '学术严谨',
+    group: 'writingStyle',
+    version: 1,
+    hint: '用词规范，谨慎下结论',
+    text: '语言风格为学术、严谨：用词准确规范，谨慎下结论，必要时说明前提、范围与限定条件。',
+  },
+  {
+    id: 'style.preserve-original',
+    name: '保留原表达',
+    group: 'writingStyle',
+    version: 1,
+    hint: '沿用原始措辞，少改写',
+    text: '语言风格为保留原表达：尽量沿用材料中的原始措辞与关键句子，不做不必要的改写。',
+  },
+];
+
+/** 输出结构（单选）——最终回答的形式。只是对 AI 的排版要求，不生成文件。 */
+export const STRUCTURE_PRESETS: PresetOption[] = [
+  {
+    id: 'structure.markdown',
+    name: 'Markdown',
+    group: 'responseStructure',
+    version: 1,
+    hint: '标题层级 + Markdown',
+    text: '请使用 Markdown 格式输出，并建立清晰的标题层级。这是对文字排版的要求，不需要生成任何文件。',
+  },
+  {
+    id: 'structure.paragraphs',
+    name: '连续段落',
+    group: 'responseStructure',
+    version: 1,
+    hint: '不用列表和标题',
+    text: '请以连续段落输出，不使用列表或标题，保持行文连贯。',
+  },
+  {
+    id: 'structure.outline',
+    name: '结构化提纲',
+    group: 'responseStructure',
+    version: 1,
+    hint: '层级化要点',
+    text: '请以结构化提纲输出，用带层级的要点组织内容，突出条目之间的从属关系。',
+  },
+  {
+    id: 'structure.tables-when-needed',
+    name: '必要时表格',
+    group: 'responseStructure',
+    version: 1,
+    hint: '适合对比处用表格',
+    text: '当内容适合对比或结构化呈现时，请使用表格；其余部分保持正常排版，不需要生成任何文件。',
+  },
+];
+
+/**
+ * 附加要求（多选）。
+ *
+ * The order of this array is the canonical compile order: no matter what order
+ * the user clicks these buttons, the compiler always emits them in this
+ * sequence, so identical selections always produce identical output.
+ */
+export const EXTRA_PRESETS: PresetOption[] = [
+  {
+    id: 'extra.keep-key-sentences',
+    name: '保留关键原句',
+    group: 'extras',
+    version: 1,
+    text: '请保留材料中的关键原句，对这些句子不要改写或删减。',
+  },
+  {
+    id: 'extra.keep-terms',
+    name: '保留术语',
+    group: 'extras',
+    version: 1,
+    text: '请保留专业术语的原始表述，不要替换、翻译或简化术语。',
+  },
+  {
+    id: 'extra.no-new-claims',
+    name: '禁止新增观点',
+    group: 'extras',
+    version: 1,
+    text: '不得擅自加入材料中没有的新观点、结论或事实。',
+  },
+  {
+    id: 'extra.keep-open-questions',
+    name: '保留未解决问题',
+    group: 'extras',
+    version: 1,
+    text: '材料中未解决的问题必须保持为未解决状态，不要给出材料之外的答案。',
+  },
+  {
+    id: 'extra.merge-duplicates',
+    name: '合并重复',
+    group: 'extras',
+    version: 1,
+    text: '请合并重复出现的内容，只保留一处完整表述，但不要因此丢失信息。',
+  },
+  {
+    id: 'extra.keep-examples',
+    name: '保留示例',
+    group: 'extras',
+    version: 1,
+    text: '请保留材料中的示例与代码，不要省略或概括掉它们。',
+  },
+];
+
+/** UI metadata for rendering the bottom preset bar. */
+export interface PresetGroupMeta {
+  id: PresetGroupId;
+  label: string;
+  mode: 'single' | 'multi';
+  options: PresetOption[];
+}
+
+export const PRESET_GROUPS: PresetGroupMeta[] = [
+  { id: 'intent', label: '输出用途', mode: 'single', options: INTENT_PRESETS },
+  { id: 'density', label: '知识密度', mode: 'single', options: DENSITY_PRESETS },
+  { id: 'writingStyle', label: '文风', mode: 'single', options: STYLE_PRESETS },
+  { id: 'responseStructure', label: '输出结构', mode: 'single', options: STRUCTURE_PRESETS },
+  { id: 'extras', label: '附加要求', mode: 'multi', options: EXTRA_PRESETS },
+];
+
+export const ALL_PRESETS: PresetOption[] = [
+  ...INTENT_PRESETS,
+  ...DENSITY_PRESETS,
+  ...STYLE_PRESETS,
+  ...STRUCTURE_PRESETS,
+  ...EXTRA_PRESETS,
+];
+
+const PRESET_BY_ID = new Map<string, PresetOption>(ALL_PRESETS.map((p) => [p.id, p]));
+
+/** Look up a preset by id. Returns undefined for unknown ids. */
+export function getPreset(id: string): PresetOption | undefined {
+  return id ? PRESET_BY_ID.get(id) : undefined;
+}

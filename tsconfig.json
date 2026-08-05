@@ -1,0 +1,7 @@
+{
+  "extends": "./.wxt/tsconfig.json",
+  "compilerOptions": {
+    "jsx": "react-jsx"
+  },
+  "exclude": ["node_modules", ".output"]
+}
