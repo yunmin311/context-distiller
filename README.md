@@ -14,7 +14,7 @@
 ![TypeScript](https://img.shields.io/badge/TypeScript-5-1f1f1f)
 ![Vitest](https://img.shields.io/badge/tested%20with-Vitest-1f1f1f)
 ![License](https://img.shields.io/badge/license-MIT-1f1f1f)
-![Privacy](https://img.shields.io/badge/no%20server%20·%20no%20tracking-✓-3a8a5f)
+![Privacy](https://img.shields.io/badge/privacy-no_server_no_tracking-3a8a5f)
 
 </div>
 
