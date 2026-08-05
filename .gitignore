@@ -21,3 +21,6 @@ stats-*.json
 .env
 .env.*
 !.env.example
+
+# Local-only logo picker preview (not part of the product)
+logo-options.html

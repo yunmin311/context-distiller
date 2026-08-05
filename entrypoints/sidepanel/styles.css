@@ -17,9 +17,10 @@
   --faint: #a6a6ae;
   --line: #eaeaee;
   --line-2: #dcdce2;
-  --accent: #10a37f;
-  --accent-weak: rgba(16, 163, 127, 0.12);
-  --sel: #0d0d0d;
+  --accent: #71717a;
+  --accent-weak: rgba(20, 20, 25, 0.05);
+  --focus: #52525b;
+  --sel: #3f3f46;
   --sel-ink: #ffffff;
   --danger: #dc2626;
 
@@ -44,10 +45,11 @@
     --faint: #67676f;
     --line: #2b2b2e;
     --line-2: #3a3a3e;
-    --accent: #19c37d;
-    --accent-weak: rgba(25, 195, 125, 0.16);
-    --sel: #f2f2f3;
-    --sel-ink: #0d0d0d;
+    --accent: #9a9aa2;
+    --accent-weak: rgba(255, 255, 255, 0.06);
+    --focus: #a1a1aa;
+    --sel: #eaeaee;
+    --sel-ink: #18181b;
     --danger: #f26b60;
     --shadow-pop: 0 6px 22px rgba(0, 0, 0, 0.55);
   }
@@ -129,8 +131,8 @@ body {
   width: 24px;
   height: 24px;
   border-radius: 7px;
-  color: var(--accent);
-  background: var(--accent-weak);
+  color: var(--ink-2);
+  background: var(--sunken);
   flex: none;
 }
 .topbar-title {
@@ -365,7 +367,7 @@ textarea:focus,
 .chip:focus-visible,
 .icon-btn:focus-visible,
 .chip-btn:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--focus);
   outline-offset: 1px;
 }
 .list-toolbar {
@@ -435,7 +437,7 @@ textarea:focus,
   color: var(--muted);
 }
 .tag-assistant {
-  color: var(--accent);
+  color: var(--ink-2);
 }
 
 .chip-btn {
@@ -453,17 +455,18 @@ textarea:focus,
   border-color: var(--ink);
   color: var(--ink);
 }
+/* "＋加入" stays quiet — outline, not a solid block (the plugin blends in). */
 .chip-btn-strong {
-  background: var(--sel);
-  border-color: var(--sel);
-  color: var(--sel-ink);
+  border-color: var(--ink-2);
+  color: var(--ink);
 }
 .chip-btn-strong:hover {
-  color: var(--sel-ink);
-  opacity: 0.86;
+  background: var(--hover);
+  border-color: var(--ink);
+  color: var(--ink);
 }
 .added-flag {
-  color: var(--accent);
+  color: var(--muted);
   font-weight: 600;
 }
 
@@ -480,6 +483,7 @@ textarea:focus,
   font-family: inherit;
   font-size: 12px;
   font-weight: 600;
+  white-space: nowrap;
   cursor: pointer;
   box-shadow: var(--shadow-pop);
   animation: pop-in 0.12s ease-out;

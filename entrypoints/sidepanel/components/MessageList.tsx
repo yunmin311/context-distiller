@@ -94,12 +94,14 @@ export function MessageList({
     const rects = range.getClientRects();
     const rect = rects[rects.length - 1] ?? range.getBoundingClientRect();
     const below = rect.top < TOP_SAFE;
+    // Keep the chip inside the panel so it never squishes against an edge.
+    const x = Math.min(Math.max(rect.left + rect.width / 2, 60), window.innerWidth - 60);
     setPopover({
       text,
       role: msgEl.dataset.role === 'user' ? 'user' : 'assistant',
       messageId: msgEl.dataset.mid,
       sourceOrder: Number(msgEl.dataset.order ?? 0),
-      x: rect.left + rect.width / 2,
+      x,
       y: below ? rect.bottom + 8 : rect.top - 8,
       below,
     });
