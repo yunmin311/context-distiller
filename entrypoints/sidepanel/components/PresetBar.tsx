@@ -18,7 +18,30 @@ const SINGLE_KEYS: Record<string, SingleKey> = {
   density: 'density',
   writingStyle: 'writingStyle',
   responseStructure: 'responseStructure',
+  outputFormat: 'outputFormat',
 };
+
+/** Collapsed 附加要求 shows this many built-in chips (2 rows in the 3-col grid). */
+const EXTRAS_COLLAPSED = 6;
+
+function Chevron({ open }: { open: boolean }) {
+  return (
+    <svg
+      className={`chevron ${open ? 'chevron-open' : ''}`}
+      viewBox="0 0 16 16"
+      width="13"
+      height="13"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M4 6l4 4 4-4" />
+    </svg>
+  );
+}
 
 export function PresetBar({
   selections,
@@ -32,6 +55,7 @@ export function PresetBar({
   // editing: null = closed, 'new' = adding, otherwise the id being edited.
   const [editing, setEditing] = useState<string | null>(null);
   const [draft, setDraft] = useState('');
+  const [extrasOpen, setExtrasOpen] = useState(false);
 
   function openNew() {
     setEditing('new');
@@ -63,14 +87,28 @@ export function PresetBar({
       {PRESET_GROUPS.map((group) => {
         const singleKey = SINGLE_KEYS[group.id];
         const isExtras = group.id === 'extras';
+        // Extras can get long; collapse to two rows unless expanded or editing.
+        const showAll = !isExtras || extrasOpen || editing !== null;
+        const builtins =
+          isExtras && !showAll ? group.options.slice(0, EXTRAS_COLLAPSED) : group.options;
         return (
           <div key={group.id} className="preset-group">
             <div className="preset-label">
               {group.label}
               {group.mode === 'multi' && <span className="preset-multi">可多选</span>}
+              {isExtras && (
+                <button
+                  className="collapse-btn"
+                  onClick={() => setExtrasOpen((o) => !o)}
+                  title={showAll ? '收起' : '展开更多附加要求（含自定义）'}
+                  aria-expanded={showAll}
+                >
+                  <Chevron open={showAll} />
+                </button>
+              )}
             </div>
             <div className="preset-options">
-              {group.options.map((option) => {
+              {builtins.map((option) => {
                 const active =
                   group.mode === 'single'
                     ? selections[singleKey!] === option.id
@@ -92,6 +130,7 @@ export function PresetBar({
               })}
 
               {isExtras &&
+                showAll &&
                 customExtras.map((option) => {
                   const active = selections.extras.includes(option.id);
                   return (
@@ -120,7 +159,7 @@ export function PresetBar({
                   );
                 })}
 
-              {isExtras && editing === null && (
+              {isExtras && showAll && editing === null && (
                 <button className="chip chip-add" title="添加一条你自己的要求" onClick={openNew}>
                   ＋ 自定义
                 </button>

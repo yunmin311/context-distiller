@@ -16,8 +16,9 @@ import { BASE_TASK_PROMPT, EXTRA_PRESETS, getPreset } from './presets';
  *   3. Knowledge-density prompt
  *   4. Writing-style prompt
  *   5. Output-structure prompt
- *   6. Additional-requirement prompts (in canonical order)
- *   7. User material (by group order, then fragment order)
+ *   6. Output-format (markup) prompt
+ *   7. Additional-requirement prompts (built-ins, then customs)
+ *   8. User material (by group order, then fragment order)
  */
 
 export interface CompileOptions {
@@ -44,8 +45,8 @@ export interface CompileResult {
 
 const SINGLE_SELECT_ORDER: Array<keyof Pick<
   PromptSelections,
-  'intent' | 'density' | 'writingStyle' | 'responseStructure'
->> = ['intent', 'density', 'writingStyle', 'responseStructure'];
+  'intent' | 'density' | 'writingStyle' | 'responseStructure' | 'outputFormat'
+>> = ['intent', 'density', 'writingStyle', 'responseStructure', 'outputFormat'];
 
 /** Convenience wrapper returning only the compiled string. */
 export function compileMessage(

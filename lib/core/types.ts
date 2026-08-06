@@ -76,6 +76,8 @@ export interface PromptSelections {
   writingStyle: string;
   /** Output-structure preset id, or ''. */
   responseStructure: string;
+  /** Output-format (markup) preset id, or ''. */
+  outputFormat: string;
   /** Additional-requirement preset ids (multi-select). */
   extras: string[];
 }
@@ -94,6 +96,7 @@ export type PresetGroupId =
   | 'density'
   | 'writingStyle'
   | 'responseStructure'
+  | 'outputFormat'
   | 'extras';
 
 /**

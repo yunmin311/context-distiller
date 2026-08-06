@@ -120,7 +120,7 @@ async function getConversation(): Promise<PanelResponse> {
   // is injected at document_idle and normally answers in a few ms; the short
   // window only bites on the very first read before it has registered, and DOM
   // extraction (still good) covers that case.
-  const mw = await requestMainWorld(450);
+  const mw = await requestMainWorld(400);
   if (mw?.ok && mw.messages && mw.messages.length > 0) {
     raw = mw.messages.map((m) => ({
       id: m.id,

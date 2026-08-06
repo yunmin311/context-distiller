@@ -144,9 +144,8 @@ export const STYLE_PRESETS: PresetOption[] = [
 ];
 
 /**
- * 输出结构（单选）——最终回答的「组织形式」。只是对 AI 的排版要求，不生成文件。
- * 注意：这里是内容如何组织，不是文件格式。Markdown / HTML / PDF 属于「标记语言 / 文件格式」，
- * 不是组织方式——Markdown 已挪到「附加要求」，而本插件按设计不产出 HTML / PDF 文件。
+ * 输出结构（单选）——最终回答的「组织形式」（段落 / 提纲 / 表格 / 问答 / 步骤）。
+ * 这是内容如何组织，与「标记格式」正交——Markdown / HTML / PDF 属于「输出格式」，见下。
  */
 export const STRUCTURE_PRESETS: PresetOption[] = [
   {
@@ -188,6 +187,46 @@ export const STRUCTURE_PRESETS: PresetOption[] = [
     version: 1,
     hint: '带编号、可依次执行',
     text: '请以带编号的步骤清单输出，每一步单独成条、可依次执行，必要时说明每步的目的或前提。这是对文字排版的要求，不需要生成任何文件。',
+  },
+];
+
+/**
+ * 输出格式（单选）——用什么「标记 / 文件格式」呈现。与「输出结构」正交。
+ * 说明：本插件只往输入框写纯文本、不产出文件；这些选项是让 AI 用对应格式作答的指令
+ * （HTML = 输出 HTML 代码；PDF = 输出便于打印 / 另存为 PDF 的排版）。
+ */
+export const FORMAT_PRESETS: PresetOption[] = [
+  {
+    id: 'format.plain',
+    name: '纯文本',
+    group: 'outputFormat',
+    version: 1,
+    hint: '不用任何标记语法',
+    text: '请以纯文本输出，不使用 Markdown、HTML 等标记语法。',
+  },
+  {
+    id: 'format.markdown',
+    name: 'Markdown',
+    group: 'outputFormat',
+    version: 1,
+    hint: '标题 / 列表 / 代码块',
+    text: '请用 Markdown 语法排版（标题层级、列表、必要时代码块）。这是对文字排版的要求，不需要生成任何文件。',
+  },
+  {
+    id: 'format.html',
+    name: 'HTML',
+    group: 'outputFormat',
+    version: 1,
+    hint: '输出完整 HTML 代码',
+    text: '请输出为完整的 HTML 代码（含基本结构，可直接保存为 .html 文件打开）。',
+  },
+  {
+    id: 'format.pdf',
+    name: 'PDF 排版',
+    group: 'outputFormat',
+    version: 1,
+    hint: '适合打印 / 另存为 PDF',
+    text: '请以适合导出或打印为 PDF 的排版输出：结构清晰、分节明确、标题层级分明，便于直接打印或另存为 PDF。',
   },
 ];
 
@@ -257,14 +296,6 @@ export const EXTRA_PRESETS: PresetOption[] = [
     text: '请合并重复出现的内容，只保留一处完整表述，但不要因此丢失信息。',
   },
   {
-    id: 'extra.use-markdown',
-    name: 'Markdown 排版',
-    group: 'extras',
-    version: 1,
-    hint: '用 Markdown 语法排版',
-    text: '请用 Markdown 语法排版（标题层级、列表、必要时代码块），这是对文字排版的要求，不需要生成任何文件。',
-  },
-  {
     id: 'extra.output-chinese',
     name: '用中文输出',
     group: 'extras',
@@ -287,6 +318,7 @@ export const PRESET_GROUPS: PresetGroupMeta[] = [
   { id: 'density', label: '知识密度', mode: 'single', options: DENSITY_PRESETS },
   { id: 'writingStyle', label: '文风', mode: 'single', options: STYLE_PRESETS },
   { id: 'responseStructure', label: '输出结构', mode: 'single', options: STRUCTURE_PRESETS },
+  { id: 'outputFormat', label: '输出格式', mode: 'single', options: FORMAT_PRESETS },
   { id: 'extras', label: '附加要求', mode: 'multi', options: EXTRA_PRESETS },
 ];
 
@@ -295,6 +327,7 @@ export const ALL_PRESETS: PresetOption[] = [
   ...DENSITY_PRESETS,
   ...STYLE_PRESETS,
   ...STRUCTURE_PRESETS,
+  ...FORMAT_PRESETS,
   ...EXTRA_PRESETS,
 ];
 

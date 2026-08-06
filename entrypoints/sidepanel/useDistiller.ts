@@ -18,7 +18,12 @@ const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 /** The five default modules from 计划书 §6.3. */
 const DEFAULT_GROUP_TITLES = ['框架', '正文内容', '补充', '复盘', '关键语句'] as const;
 
-export type SingleKey = 'intent' | 'density' | 'writingStyle' | 'responseStructure';
+export type SingleKey =
+  | 'intent'
+  | 'density'
+  | 'writingStyle'
+  | 'responseStructure'
+  | 'outputFormat';
 
 /** A local text selection made inside the side panel, ready to become a Fragment. */
 export interface SelectionInput {
@@ -53,7 +58,14 @@ function createDefaultGroups(): FragmentGroup[] {
 }
 
 function emptySelections(): PromptSelections {
-  return { intent: '', density: '', writingStyle: '', responseStructure: '', extras: [] };
+  return {
+    intent: '',
+    density: '',
+    writingStyle: '',
+    responseStructure: '',
+    outputFormat: '',
+    extras: [],
+  };
 }
 
 function initialState(): DistillerState {

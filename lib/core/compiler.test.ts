@@ -28,6 +28,7 @@ const EMPTY_SELECTIONS: PromptSelections = {
   density: '',
   writingStyle: '',
   responseStructure: '',
+  outputFormat: '',
   extras: [],
 };
 
@@ -52,6 +53,7 @@ describe('compileMessage', () => {
       density: 'density.high',
       writingStyle: 'style.professional',
       responseStructure: 'structure.paragraphs',
+      outputFormat: 'format.markdown',
       extras: ['extra.no-new-claims', 'extra.keep-key-sentences'],
     };
     const a = compileMessage(groups, selections);
@@ -62,22 +64,25 @@ describe('compileMessage', () => {
     expect(a).toBe(b);
   });
 
-  it('emits single-select prompts in the fixed order intent→density→style→structure', () => {
+  it('emits single-select prompts in the fixed order intent→density→style→structure→format', () => {
     const text = compileMessage([], {
       intent: 'intent.study',
       density: 'density.low',
       writingStyle: 'style.academic',
       responseStructure: 'structure.outline',
+      outputFormat: 'format.html',
       extras: [],
     });
     const iIntent = text.indexOf(getPreset('intent.study')!.text);
     const iDensity = text.indexOf(getPreset('density.low')!.text);
     const iStyle = text.indexOf(getPreset('style.academic')!.text);
     const iStructure = text.indexOf(getPreset('structure.outline')!.text);
+    const iFormat = text.indexOf(getPreset('format.html')!.text);
     expect(iIntent).toBeGreaterThan(-1);
     expect(iIntent).toBeLessThan(iDensity);
     expect(iDensity).toBeLessThan(iStyle);
     expect(iStyle).toBeLessThan(iStructure);
+    expect(iStructure).toBeLessThan(iFormat);
   });
 
   it('emits extras in canonical library order regardless of click order', () => {
@@ -168,6 +173,7 @@ describe('compileMessage', () => {
       density: '',
       writingStyle: '',
       responseStructure: '',
+      outputFormat: '',
       extras: ['extra.also-fake'],
     });
     expect(text).toBe(BASE_TASK_PROMPT);
@@ -198,9 +204,14 @@ describe('preset library integrity', () => {
     for (const p of ALL_PRESETS) {
       expect(p.text.length).toBeGreaterThan(0);
       expect(p.version).toBeGreaterThanOrEqual(1);
-      expect(['intent', 'density', 'writingStyle', 'responseStructure', 'extras']).toContain(
-        p.group,
-      );
+      expect([
+        'intent',
+        'density',
+        'writingStyle',
+        'responseStructure',
+        'outputFormat',
+        'extras',
+      ]).toContain(p.group);
     }
   });
 });

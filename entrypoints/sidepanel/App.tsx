@@ -250,12 +250,9 @@ export function App() {
             </section>
 
             <section className="section">
-              <div className="eyebrow">
-                整理工作区<span className="muted tiny"> · 目标：{activeGroup?.title}</span>
-              </div>
+              <div className="eyebrow">整理工作区</div>
               <GroupBoard
                 groups={state.groups}
-                activeGroupId={activeGroupId}
                 onMove={actions.moveFragment}
                 onMoveToGroup={actions.moveToGroup}
                 onRemove={actions.removeFragment}

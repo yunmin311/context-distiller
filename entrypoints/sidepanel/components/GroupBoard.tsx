@@ -2,7 +2,6 @@ import type { FragmentGroup } from '../../../lib/core/types';
 
 interface GroupBoardProps {
   groups: FragmentGroup[];
-  activeGroupId: string;
   onMove: (groupId: string, fragmentId: string, dir: -1 | 1) => void;
   onMoveToGroup: (fromGroupId: string, toGroupId: string, fragmentId: string) => void;
   onRemove: (groupId: string, fragmentId: string) => void;
@@ -21,7 +20,6 @@ function roleLabel(role: 'user' | 'assistant'): string {
  */
 export function GroupBoard({
   groups,
-  activeGroupId,
   onMove,
   onMoveToGroup,
   onRemove,
@@ -32,13 +30,11 @@ export function GroupBoard({
     <div className="group-board">
       <div className="group-list">
         {groups.map((group) => {
-          const isActive = group.id === activeGroupId;
           const isEmpty = group.fragments.length === 0;
           return (
-            <section key={group.id} className={`group ${isActive ? 'group-active' : ''}`}>
+            <section key={group.id} className="group">
               <header className="group-head">
                 <span className="group-title">{group.title}</span>
-                {isActive && <span className="target-flag tiny">当前目标</span>}
                 {!isEmpty && <span className="count-pill">{group.fragments.length}</span>}
                 <div className="spacer" />
                 {isEmpty && groups.length > 1 && (
