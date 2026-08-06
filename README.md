@@ -18,16 +18,15 @@
 
 </div>
 
-<table>
-  <tr>
-    <td width="50%"><img src="docs/screenshots/messages.png" alt="读取并选材" /></td>
-    <td width="50%"><img src="docs/screenshots/workspace.png" alt="分组与预设" /></td>
-  </tr>
-  <tr>
-    <td align="center"><sub>读取对话 · 划词加片段 · 整条加入</sub></td>
-    <td align="center"><sub>模块编组 · 预设 Prompt · 一键编译</sub></td>
-  </tr>
-</table>
+<img src="docs/screenshots/messages.png" width="860" alt="Context Distiller 停靠在 ChatGPT 对话右侧：读取消息、划词加片段、整条加入" />
+
+<sub>停靠在 ChatGPT 对话旁 · 读取消息 · 划词加片段 · 整条加入</sub>
+
+<br />
+
+<img src="docs/screenshots/workspace.png" width="340" alt="侧边栏工作区：模块编组 + 预设 Prompt + 一键编译" />
+
+<sub>模块编组 · 预设 Prompt（用途 / 密度 / 文风 / 结构 / 格式 / 附加要求）· 一键编译</sub>
 
 ---
 
@@ -103,6 +102,7 @@ Context Distiller 解决的不是「让插件自己总结对话」，而是「�
 pnpm install       # 安装依赖（自动 wxt prepare 生成类型）
 pnpm dev           # 开发模式：自动打开带扩展的 Chrome，热更新
 pnpm build         # 生产构建 → .output/chrome-mv3
+pnpm zip           # 打包 → .output/*.zip（上架用，流程见 docs/STORE.md）
 pnpm test          # 单元测试
 pnpm typecheck     # 类型检查
 ```

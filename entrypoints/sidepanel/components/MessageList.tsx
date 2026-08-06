@@ -144,6 +144,7 @@ export function MessageList({
           <span className="target-cap">加入到</span>
           <select
             className="input target-select"
+            aria-label="选择加入目标模块"
             value={activeGroupId}
             onChange={(e) => {
               if (e.target.value === NEW_MODULE) setCreating(true);
@@ -210,6 +211,7 @@ export function MessageList({
               setCreating(false);
             }}
             title="取消"
+            aria-label="取消新建模块"
           >
             ✕
           </button>

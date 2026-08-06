@@ -21,8 +21,8 @@ const SINGLE_KEYS: Record<string, SingleKey> = {
   outputFormat: 'outputFormat',
 };
 
-/** Collapsed 附加要求 shows this many built-in chips (2 rows in the 3-col grid). */
-const EXTRAS_COLLAPSED = 6;
+/** A collapsible category shows this many chips when collapsed (2 rows, 3-col). */
+const COLLAPSED_CHIPS = 6;
 
 function Chevron({ open }: { open: boolean }) {
   return (
@@ -55,7 +55,16 @@ export function PresetBar({
   // editing: null = closed, 'new' = adding, otherwise the id being edited.
   const [editing, setEditing] = useState<string | null>(null);
   const [draft, setDraft] = useState('');
-  const [extrasOpen, setExtrasOpen] = useState(false);
+  // Which categories are expanded past two rows (by group id).
+  const [openGroups, setOpenGroups] = useState<Set<string>>(() => new Set());
+
+  function toggleOpen(id: string) {
+    setOpenGroups((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  }
 
   function openNew() {
     setEditing('new');
@@ -87,20 +96,25 @@ export function PresetBar({
       {PRESET_GROUPS.map((group) => {
         const singleKey = SINGLE_KEYS[group.id];
         const isExtras = group.id === 'extras';
-        // Extras can get long; collapse to two rows unless expanded or editing.
-        const showAll = !isExtras || extrasOpen || editing !== null;
+        // Collapse any category taller than two rows. Extras also counts its
+        // custom chips + the add button toward the total.
+        const totalCount = group.options.length + (isExtras ? customExtras.length + 1 : 0);
+        const collapsible = totalCount > COLLAPSED_CHIPS;
+        const showAll =
+          !collapsible || openGroups.has(group.id) || (isExtras && editing !== null);
         const builtins =
-          isExtras && !showAll ? group.options.slice(0, EXTRAS_COLLAPSED) : group.options;
+          collapsible && !showAll ? group.options.slice(0, COLLAPSED_CHIPS) : group.options;
         return (
           <div key={group.id} className="preset-group">
             <div className="preset-label">
               {group.label}
               {group.mode === 'multi' && <span className="preset-multi">可多选</span>}
-              {isExtras && (
+              {collapsible && (
                 <button
                   className="collapse-btn"
-                  onClick={() => setExtrasOpen((o) => !o)}
-                  title={showAll ? '收起' : '展开更多附加要求（含自定义）'}
+                  onClick={() => toggleOpen(group.id)}
+                  title={showAll ? '收起' : '展开全部'}
+                  aria-label={showAll ? '收起' : '展开全部'}
                   aria-expanded={showAll}
                 >
                   <Chevron open={showAll} />
@@ -148,6 +162,7 @@ export function PresetBar({
                       <button
                         className="chip-x"
                         title="删除这条自定义要求"
+                        aria-label={`删除自定义要求：${option.name}`}
                         onClick={() => {
                           if (editing === option.id) close();
                           onRemoveCustom(option.id);

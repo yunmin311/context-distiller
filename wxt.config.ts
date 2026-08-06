@@ -9,8 +9,9 @@ export default defineConfig({
   manifest: {
     name: 'Context Distiller',
     // Keep in sync with package.json; WXT reads the version from package.json.
+    // NB: Chrome Web Store caps manifest `description` at 132 characters.
     description:
-      'A temporary material-selection + Prompt-compilation workbench beside AI chats. MVP: ChatGPT. No model API, no server, no persistence, never auto-sends.',
+      'Pick, group and compile ChatGPT snippets into one plain-text prompt. Local-only: no server, no tracking, never auto-sends.',
     // storage: only for the user's own long-term modules / custom requirements
     // (config), never conversation data.
     permissions: ['sidePanel', 'scripting', 'storage'],

@@ -41,6 +41,7 @@ export function GroupBoard({
                   <button
                     className="icon-btn xs danger-hover"
                     title={group.persist ? '删除这个模块（长期模块，一并从记忆里移除）' : '删除这个空模块'}
+                    aria-label={`删除模块：${group.title}`}
                     onClick={() => onRemoveGroup(group.id)}
                   >
                     ✕
@@ -62,6 +63,7 @@ export function GroupBoard({
                           disabled={index === 0}
                           onClick={() => onMove(group.id, fragment.id, -1)}
                           title="上移"
+                          aria-label="上移片段"
                         >
                           ↑
                         </button>
@@ -70,6 +72,7 @@ export function GroupBoard({
                           disabled={index === group.fragments.length - 1}
                           onClick={() => onMove(group.id, fragment.id, 1)}
                           title="下移"
+                          aria-label="下移片段"
                         >
                           ↓
                         </button>
@@ -77,6 +80,7 @@ export function GroupBoard({
                           className="icon-btn xs danger-hover"
                           onClick={() => onRemove(group.id, fragment.id)}
                           title="删除"
+                          aria-label="删除片段"
                         >
                           ✕
                         </button>

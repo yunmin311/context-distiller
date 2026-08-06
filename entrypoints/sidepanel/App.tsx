@@ -189,6 +189,7 @@ export function App() {
         <button
           className="icon-btn topbar-refresh"
           title="读取 / 刷新当前对话"
+          aria-label="读取或刷新当前对话"
           onClick={() => handleLoad()}
         >
           {state.status === 'loading' ? (
