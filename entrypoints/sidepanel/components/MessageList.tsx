@@ -1,15 +1,17 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { ConversationMessage } from '../../../lib/core/types';
+import type { ConversationMessage, FragmentGroup } from '../../../lib/core/types';
 import type { SelectionInput } from '../useDistiller';
 
 interface MessageListProps {
   messages: ConversationMessage[];
   addedIds: Set<string>;
+  groups: FragmentGroup[];
+  activeGroupId: string;
+  onSetActive: (groupId: string) => void;
   onAdd: (message: ConversationMessage) => void;
   onAddPair: (message: ConversationMessage) => void;
   onAddSelection: (payload: SelectionInput) => void;
   canPair: (message: ConversationMessage) => boolean;
-  activeGroupTitle: string;
 }
 
 interface Popover extends SelectionInput {
@@ -30,11 +32,13 @@ function roleLabel(role: ConversationMessage['role']): string {
 export function MessageList({
   messages,
   addedIds,
+  groups,
+  activeGroupId,
+  onSetActive,
   onAdd,
   onAddPair,
   onAddSelection,
   canPair,
-  activeGroupTitle,
 }: MessageListProps) {
   const [filter, setFilter] = useState('');
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -122,10 +126,25 @@ export function MessageList({
   return (
     <div className="message-list" onMouseUp={handleMouseUp}>
       <div className="list-toolbar">
+        <label className="target-pick" title="新加入的整条 / 片段会放进这个模块">
+          <span className="target-cap">加入到</span>
+          <select
+            className="input target-select"
+            value={activeGroupId}
+            onChange={(e) => onSetActive(e.target.value)}
+          >
+            {groups.map((g) => (
+              <option key={g.id} value={g.id}>
+                {g.title}
+                {g.fragments.length ? ` (${g.fragments.length})` : ''}
+              </option>
+            ))}
+          </select>
+        </label>
         <input
           className="input filter-input"
           type="search"
-          placeholder="筛选消息…"
+          placeholder="筛选…"
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
         />
@@ -135,7 +154,7 @@ export function MessageList({
       </div>
 
       <p className="hint tiny">
-        「＋加入」放整条到「{activeGroupTitle}」；只要其中几句 —— 直接在消息里划词，点冒出来的「加入选中」。
+        整条点「＋加入」；只要其中几句 —— 直接在消息里划词，点冒出来的「加入选中」。
       </p>
 
       {filtered.map((message) => {

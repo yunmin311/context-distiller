@@ -73,6 +73,20 @@ export function App() {
     [actions],
   );
 
+  // "重试" reloads the page for the user and reads again, so they don't have to
+  // refresh by hand.
+  const handleRetry = useCallback(async () => {
+    const res = await actions.retryWithReload();
+    if (res.ok) {
+      setToast({
+        text: res.partial
+          ? `已刷新并读取 ${res.count} 条 · 超长对话可向上滚动加载后再刷新`
+          : `已刷新并读取 ${res.count} 条消息`,
+        tone: 'ok',
+      });
+    }
+  }, [actions]);
+
   // Auto-read on open when the active tab is a ChatGPT page, so the panel lands
   // straight on the messages instead of an extra click.
   useEffect(() => {
@@ -208,8 +222,8 @@ export function App() {
           <div className="notice notice-error">
             <strong>读取失败</strong>
             <p className="muted tiny">{state.error}</p>
-            <button className="btn btn-outline btn-sm" onClick={() => handleLoad()}>
-              重试
+            <button className="btn btn-outline btn-sm" onClick={() => handleRetry()}>
+              刷新页面重试
             </button>
           </div>
         )}
@@ -221,6 +235,9 @@ export function App() {
               <MessageList
                 messages={state.messages}
                 addedIds={addedIds}
+                groups={state.groups}
+                activeGroupId={activeGroupId}
+                onSetActive={setActiveGroupId}
                 onAdd={(m) => {
                   actions.addMessageFragment(m, activeGroupId);
                   setToast({ text: `已加入到「${activeGroup?.title}」`, tone: 'ok' });
@@ -228,7 +245,6 @@ export function App() {
                 onAddPair={addPair}
                 onAddSelection={handleAddSelection}
                 canPair={canPair}
-                activeGroupTitle={activeGroup?.title ?? ''}
               />
             </section>
 

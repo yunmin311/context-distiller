@@ -237,6 +237,14 @@ export const EXTRA_PRESETS: PresetOption[] = [
     text: '材料中未解决的问题必须保持为未解决状态，不要给出材料之外的答案。',
   },
   {
+    id: 'extra.merge-duplicates',
+    name: '合并重复',
+    group: 'extras',
+    version: 1,
+    hint: '重复内容合成一处',
+    text: '请合并重复出现的内容，只保留一处完整表述，但不要因此丢失信息。',
+  },
+  {
     id: 'extra.keep-examples',
     name: '保留示例',
     group: 'extras',

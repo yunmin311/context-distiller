@@ -363,14 +363,40 @@ textarea:focus,
   outline: 2px solid var(--focus);
   outline-offset: 1px;
 }
+/* Sticky so the "加入到" target stays reachable no matter how long the list —
+   it pins while any part of the message list is scrolled through. */
 .list-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 5;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 7px;
+  padding: 6px 0 7px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
 }
 .filter-input {
   flex: 1;
   min-width: 0;
+}
+.target-pick {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex: none;
+}
+.target-cap {
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.target-select {
+  max-width: 118px;
+  padding: 6px 7px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
 }
 
 /* --- SOURCE messages (primary) --------------------------------------- */

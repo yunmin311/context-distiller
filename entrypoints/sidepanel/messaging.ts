@@ -17,6 +17,22 @@ export async function activeTabIsSupported(): Promise<boolean> {
 }
 
 /**
+ * Reload the active tab. Used by "重试" so the user doesn't have to refresh the
+ * page by hand — most read failures are just a not-yet-ready content script.
+ * Works with our host permissions; no extra "tabs" permission needed.
+ */
+export async function reloadActiveTab(): Promise<boolean> {
+  const tab = await getActiveTab();
+  if (!tab?.id) return false;
+  try {
+    await browser.tabs.reload(tab.id);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Send a typed request to the content script in the active tab. Never throws —
  * connectivity problems (wrong page, content script not injected yet) come back
  * as a `{ kind: 'error' }` response so the UI can show a friendly message.

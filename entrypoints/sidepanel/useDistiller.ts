@@ -8,7 +8,9 @@ import type {
   PromptSelections,
 } from '../../lib/core/types';
 import { createId } from '../../lib/utils/id';
-import { sendToActiveTab } from './messaging';
+import { reloadActiveTab, sendToActiveTab } from './messaging';
+
+const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /** The five default modules from 计划书 §6.3. */
 const DEFAULT_GROUP_TITLES = ['框架', '正文内容', '补充', '复盘', '关键语句'] as const;
@@ -263,6 +265,38 @@ export function useDistiller() {
     [],
   );
 
+  /**
+   * Reload the page for the user, then poll until the freshly loaded content
+   * script answers (re-injects at document_idle, then ChatGPT renders — a few
+   * seconds). Saves the user a manual refresh after a read failure.
+   */
+  const retryWithReload = useCallback(
+    async (): Promise<{ ok: boolean; count: number; partial: boolean }> => {
+      dispatch({ type: 'load-start' });
+      await reloadActiveTab();
+      for (let attempt = 0; attempt < 14; attempt += 1) {
+        await delay(700);
+        const res = await sendToActiveTab({ kind: 'get-conversation' });
+        if (res.kind === 'conversation' && res.ok) {
+          dispatch({
+            type: 'load-success',
+            conversation: res.conversation,
+            messages: res.messages,
+            partial: res.partial,
+            source: res.source,
+          });
+          return { ok: true, count: res.messages.length, partial: res.partial };
+        }
+      }
+      dispatch({
+        type: 'load-error',
+        error: '刷新后仍未读取到消息，请确认页面已打开一个对话后再重试。',
+      });
+      return { ok: false, count: 0, partial: false };
+    },
+    [],
+  );
+
   const addMessageFragment = useCallback(
     (message: ConversationMessage, groupId: string) => {
       const fragment: Fragment = {
@@ -296,6 +330,7 @@ export function useDistiller() {
   const actions = useMemo(
     () => ({
       loadConversation,
+      retryWithReload,
       addMessageFragment,
       addSelection,
       removeFragment: (groupId: string, fragmentId: string) =>
@@ -314,7 +349,7 @@ export function useDistiller() {
       clearMaterial: () => dispatch({ type: 'clear-material' }),
       reset: () => dispatch({ type: 'reset' }),
     }),
-    [loadConversation, addMessageFragment, addSelection],
+    [loadConversation, retryWithReload, addMessageFragment, addSelection],
   );
 
   return { state, actions };
