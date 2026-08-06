@@ -6,7 +6,7 @@ import {
   getPreset,
   ALL_PRESETS,
 } from './presets';
-import type { Fragment, FragmentGroup, PromptSelections } from './types';
+import type { Fragment, FragmentGroup, PresetOption, PromptSelections } from './types';
 
 function frag(text: string, over: Partial<Fragment> = {}): Fragment {
   return {
@@ -51,7 +51,7 @@ describe('compileMessage', () => {
       intent: 'intent.dense-notes',
       density: 'density.high',
       writingStyle: 'style.professional',
-      responseStructure: 'structure.markdown',
+      responseStructure: 'structure.paragraphs',
       extras: ['extra.no-new-claims', 'extra.keep-key-sentences'],
     };
     const a = compileMessage(groups, selections);
@@ -95,6 +95,25 @@ describe('compileMessage', () => {
     const positions = EXTRA_PRESETS.map((p) => canonical.indexOf(p.text));
     const sorted = [...positions].sort((a, b) => a - b);
     expect(positions).toEqual(sorted);
+  });
+
+  it('appends custom requirements after built-in extras, in stable order', () => {
+    const custom: PresetOption[] = [
+      { id: 'extra.custom.a', name: '甲', group: 'extras', version: 1, text: '自定义要求甲。', custom: true },
+      { id: 'extra.custom.b', name: '乙', group: 'extras', version: 1, text: '自定义要求乙。', custom: true },
+    ];
+    // Click order deliberately scrambled — output must not depend on it.
+    const selections: PromptSelections = {
+      ...EMPTY_SELECTIONS,
+      extras: ['extra.custom.b', 'extra.no-new-claims', 'extra.custom.a'],
+    };
+    const text = compileMessage([], selections, { customExtras: custom });
+    const iBuiltin = text.indexOf(getPreset('extra.no-new-claims')!.text);
+    const iA = text.indexOf('自定义要求甲。');
+    const iB = text.indexOf('自定义要求乙。');
+    expect(iBuiltin).toBeGreaterThan(-1);
+    expect(iBuiltin).toBeLessThan(iA); // built-ins before customs
+    expect(iA).toBeLessThan(iB); // customs in their array order, not click order
   });
 
   it('places all prompts before any user material', () => {

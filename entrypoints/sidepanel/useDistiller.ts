@@ -1,14 +1,17 @@
-import { useCallback, useMemo, useReducer } from 'react';
+import { useCallback, useEffect, useMemo, useReducer, useRef } from 'react';
 import type {
   ConversationInfo,
   ConversationMessage,
   Fragment,
   FragmentGroup,
   MessageSource,
+  PresetOption,
+  PresetScope,
   PromptSelections,
 } from '../../lib/core/types';
 import { createId } from '../../lib/utils/id';
 import { reloadActiveTab, sendToActiveTab } from './messaging';
+import { loadPrefs, savePrefs, type Prefs } from './prefs';
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -34,6 +37,10 @@ export interface DistillerState {
   source?: MessageSource;
   groups: FragmentGroup[];
   selections: PromptSelections;
+  /** User-defined requirements (session + long-term), appended after built-ins. */
+  customExtras: PresetOption[];
+  /** True once long-term config has been loaded, so we don't save over it. */
+  hydrated: boolean;
 }
 
 function createDefaultGroups(): FragmentGroup[] {
@@ -56,6 +63,8 @@ function initialState(): DistillerState {
     partial: false,
     groups: createDefaultGroups(),
     selections: emptySelections(),
+    customExtras: [],
+    hydrated: false,
   };
 }
 
@@ -75,10 +84,14 @@ type Action =
   | { type: 'move-fragment'; groupId: string; fragmentId: string; dir: -1 | 1 }
   | { type: 'move-to-group'; fromGroupId: string; toGroupId: string; fragmentId: string }
   | { type: 'set-note'; groupId: string; fragmentId: string; note: string }
-  | { type: 'add-group'; title: string }
+  | { type: 'add-group'; id: string; title: string; persist: boolean }
   | { type: 'remove-group'; groupId: string }
   | { type: 'set-single'; key: SingleKey; presetId: string }
   | { type: 'toggle-extra'; presetId: string }
+  | { type: 'add-custom-extra'; option: PresetOption }
+  | { type: 'update-custom-extra'; id: string; name: string; text: string }
+  | { type: 'remove-custom-extra'; id: string }
+  | { type: 'hydrate-prefs'; prefs: Prefs }
   | { type: 'clear-material' };
 
 function mapGroup(
@@ -187,10 +200,12 @@ function reducer(state: DistillerState, action: Action): DistillerState {
         groups: [
           ...state.groups,
           {
-            id: createId('g'),
+            id: action.id,
             title: action.title.trim() || `模块 ${state.groups.length + 1}`,
             order: state.groups.length,
             fragments: [],
+            custom: true,
+            persist: action.persist,
           },
         ],
       };
@@ -223,10 +238,72 @@ function reducer(state: DistillerState, action: Action): DistillerState {
       };
     }
 
-    case 'clear-material':
+    case 'add-custom-extra':
       return {
         ...state,
-        groups: createDefaultGroups(),
+        customExtras: [...state.customExtras, action.option],
+        // Auto-select the requirement the user just wrote.
+        selections: {
+          ...state.selections,
+          extras: [...state.selections.extras, action.option.id],
+        },
+      };
+
+    case 'update-custom-extra':
+      return {
+        ...state,
+        customExtras: state.customExtras.map((e) =>
+          e.id === action.id ? { ...e, name: action.name, text: action.text } : e,
+        ),
+      };
+
+    case 'remove-custom-extra':
+      return {
+        ...state,
+        customExtras: state.customExtras.filter((e) => e.id !== action.id),
+        selections: {
+          ...state.selections,
+          extras: state.selections.extras.filter((id) => id !== action.id),
+        },
+      };
+
+    case 'hydrate-prefs': {
+      const titles = new Set(state.groups.map((g) => g.title));
+      const restored: FragmentGroup[] = [];
+      action.prefs.modules.forEach((title, i) => {
+        if (titles.has(title)) return;
+        titles.add(title);
+        restored.push({
+          id: createId('g'),
+          title,
+          order: state.groups.length + i,
+          fragments: [],
+          custom: true,
+          persist: true,
+        });
+      });
+      const customExtras: PresetOption[] = action.prefs.extras.map((e) => ({
+        id: e.id,
+        name: e.name,
+        text: e.text,
+        group: 'extras',
+        version: 1,
+        custom: true,
+        scope: 'persist',
+      }));
+      return {
+        ...state,
+        groups: [...state.groups, ...restored],
+        customExtras,
+        hydrated: true,
+      };
+    }
+
+    case 'clear-material':
+      // Clear MATERIAL only — keep the module structure and custom requirements.
+      return {
+        ...state,
+        groups: state.groups.map((g) => ({ ...g, fragments: [] })),
         selections: emptySelections(),
       };
 
@@ -237,6 +314,35 @@ function reducer(state: DistillerState, action: Action): DistillerState {
 
 export function useDistiller() {
   const [state, dispatch] = useReducer(reducer, undefined, initialState);
+
+  // Load the user's long-term modules / requirements once, on mount.
+  useEffect(() => {
+    let alive = true;
+    void loadPrefs().then((prefs) => {
+      if (alive) dispatch({ type: 'hydrate-prefs', prefs });
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  // Mirror the long-term (persist-scoped) items to local config when they
+  // change. Guarded by `hydrated` so the initial empty state never overwrites
+  // stored config, and by a signature so ordinary edits don't spam writes.
+  const lastSaved = useRef('');
+  useEffect(() => {
+    if (!state.hydrated) return;
+    const prefs: Prefs = {
+      modules: state.groups.filter((g) => g.persist).map((g) => g.title),
+      extras: state.customExtras
+        .filter((e) => e.scope === 'persist')
+        .map((e) => ({ id: e.id, name: e.name, text: e.text })),
+    };
+    const signature = JSON.stringify(prefs);
+    if (signature === lastSaved.current) return;
+    lastSaved.current = signature;
+    void savePrefs(prefs);
+  }, [state.groups, state.customExtras, state.hydrated]);
 
   /** Outcome of a load, returned so the caller can show a transient hint. */
   const loadConversation = useCallback(
@@ -341,11 +447,27 @@ export function useDistiller() {
         dispatch({ type: 'move-to-group', fromGroupId, toGroupId, fragmentId }),
       setNote: (groupId: string, fragmentId: string, note: string) =>
         dispatch({ type: 'set-note', groupId, fragmentId, note }),
-      addGroup: (title: string) => dispatch({ type: 'add-group', title }),
+      /** Create a module; returns its id so the caller can make it active. */
+      addGroup: (title: string, persist = false): string => {
+        const id = createId('g');
+        dispatch({ type: 'add-group', id, title, persist });
+        return id;
+      },
       removeGroup: (groupId: string) => dispatch({ type: 'remove-group', groupId }),
       setSingle: (key: SingleKey, presetId: string) =>
         dispatch({ type: 'set-single', key, presetId }),
       toggleExtra: (presetId: string) => dispatch({ type: 'toggle-extra', presetId }),
+      addCustomExtra: (name: string, text: string, scope: PresetScope): string => {
+        const id = createId('ex');
+        dispatch({
+          type: 'add-custom-extra',
+          option: { id, name, text, group: 'extras', version: 1, custom: true, scope },
+        });
+        return id;
+      },
+      updateCustomExtra: (id: string, name: string, text: string) =>
+        dispatch({ type: 'update-custom-extra', id, name, text }),
+      removeCustomExtra: (id: string) => dispatch({ type: 'remove-custom-extra', id }),
       clearMaterial: () => dispatch({ type: 'clear-material' }),
       reset: () => dispatch({ type: 'reset' }),
     }),

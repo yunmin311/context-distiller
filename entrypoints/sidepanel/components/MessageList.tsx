@@ -8,11 +8,14 @@ interface MessageListProps {
   groups: FragmentGroup[];
   activeGroupId: string;
   onSetActive: (groupId: string) => void;
+  onAddGroup: (title: string, persist: boolean) => string;
   onAdd: (message: ConversationMessage) => void;
   onAddPair: (message: ConversationMessage) => void;
   onAddSelection: (payload: SelectionInput) => void;
   canPair: (message: ConversationMessage) => boolean;
 }
+
+const NEW_MODULE = '__new__';
 
 interface Popover extends SelectionInput {
   x: number;
@@ -35,6 +38,7 @@ export function MessageList({
   groups,
   activeGroupId,
   onSetActive,
+  onAddGroup,
   onAdd,
   onAddPair,
   onAddSelection,
@@ -43,6 +47,16 @@ export function MessageList({
   const [filter, setFilter] = useState('');
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [popover, setPopover] = useState<Popover | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [newName, setNewName] = useState('');
+
+  function createModule(persist: boolean) {
+    const name = newName.trim();
+    if (!name) return;
+    onSetActive(onAddGroup(name, persist));
+    setNewName('');
+    setCreating(false);
+  }
 
   const filtered = useMemo(() => {
     const q = filter.trim().toLowerCase();
@@ -131,7 +145,10 @@ export function MessageList({
           <select
             className="input target-select"
             value={activeGroupId}
-            onChange={(e) => onSetActive(e.target.value)}
+            onChange={(e) => {
+              if (e.target.value === NEW_MODULE) setCreating(true);
+              else onSetActive(e.target.value);
+            }}
           >
             {groups.map((g) => (
               <option key={g.id} value={g.id}>
@@ -139,6 +156,7 @@ export function MessageList({
                 {g.fragments.length ? ` (${g.fragments.length})` : ''}
               </option>
             ))}
+            <option value={NEW_MODULE}>＋ 新建模块…</option>
           </select>
         </label>
         <input
@@ -152,6 +170,51 @@ export function MessageList({
           {filtered.length}/{messages.length}
         </span>
       </div>
+
+      {creating && (
+        <div className="new-module">
+          <input
+            className="input"
+            autoFocus
+            placeholder="新模块名称"
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') createModule(false);
+              if (e.key === 'Escape') {
+                setNewName('');
+                setCreating(false);
+              }
+            }}
+          />
+          <button
+            className="chip-btn tiny"
+            disabled={!newName.trim()}
+            onClick={() => createModule(false)}
+            title="只在这次有，关掉就没了"
+          >
+            本次
+          </button>
+          <button
+            className="chip-btn tiny"
+            disabled={!newName.trim()}
+            onClick={() => createModule(true)}
+            title="长期保留，下次打开还在"
+          >
+            长期
+          </button>
+          <button
+            className="icon-btn xs"
+            onClick={() => {
+              setNewName('');
+              setCreating(false);
+            }}
+            title="取消"
+          >
+            ✕
+          </button>
+        </div>
+      )}
 
       <p className="hint tiny">
         整条点「＋加入」；只要其中几句 —— 直接在消息里划词，点冒出来的「加入选中」。

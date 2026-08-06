@@ -153,10 +153,15 @@ body {
 .app-main {
   flex: 1;
   overflow-y: auto;
-  padding: 12px 12px 16px;
+  padding: 0 12px 10px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 14px;
+}
+/* A little breathing room at rest, but the sticky toolbar pins flush to the top
+   bar (no gap) once the eyebrow scrolls away. */
+.app-main > *:first-child {
+  margin-top: 12px;
 }
 
 .section {
@@ -183,8 +188,8 @@ body {
 .app-footer {
   display: flex;
   flex-direction: column;
-  gap: 7px;
-  padding: 9px 12px;
+  gap: 5px;
+  padding: 6px 12px 9px;
   background: var(--surface);
   border-top: 1px solid var(--line);
 }
@@ -560,24 +565,6 @@ textarea:focus,
   align-items: center;
   gap: 8px;
   padding: 9px 9px 9px 11px;
-  cursor: pointer;
-  transition: background 0.12s;
-}
-.group:not(.group-active) .group-head:hover {
-  background: var(--hover);
-}
-.radio-dot {
-  width: 13px;
-  height: 13px;
-  border-radius: 50%;
-  border: 1.5px solid var(--line-2);
-  flex: none;
-  transition: border-color 0.12s;
-}
-.radio-dot.on {
-  border-color: var(--accent);
-  background: var(--accent);
-  box-shadow: inset 0 0 0 2.5px var(--surface);
 }
 .group-title {
   font-size: 12.5px;
@@ -693,13 +680,18 @@ textarea:focus,
   background: var(--sunken);
   color: var(--ink-2);
   border-radius: 8px;
-  padding: 7px 8px;
+  padding: 6px 8px;
   font-size: 12px;
   font-weight: 500;
   font-family: inherit;
   cursor: pointer;
   text-align: center;
   transition: background 0.14s, color 0.14s;
+  /* one line only — categories stay at most two rows tall */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
 }
 .chip:hover {
   background: var(--hover);
@@ -708,6 +700,89 @@ textarea:focus,
 .chip-active {
   background: var(--sel);
   color: var(--sel-ink);
+  font-weight: 600;
+}
+
+/* --- custom requirements (user add / edit / delete) ------------------ */
+
+.chip-custom-wrap {
+  position: relative;
+  display: flex;
+  min-width: 0;
+}
+.chip-custom {
+  flex: 1;
+  min-width: 0;
+  padding-right: 16px; /* room for the ✕ */
+  border: 1px dashed var(--line-2);
+  background: transparent;
+}
+.chip-custom.chip-active {
+  background: var(--sel);
+  color: var(--sel-ink);
+  border-color: transparent;
+}
+.chip-x {
+  position: absolute;
+  top: 50%;
+  right: 2px;
+  transform: translateY(-50%);
+  display: none;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1;
+  padding: 3px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.chip-custom-wrap:hover .chip-x,
+.chip-x:focus-visible {
+  display: block;
+}
+.chip-x:hover {
+  color: var(--danger);
+}
+.chip-add {
+  border: 1px dashed var(--line-2);
+  background: transparent;
+  color: var(--muted);
+}
+.chip-add:hover {
+  color: var(--ink);
+  border-color: var(--ink-2);
+  background: transparent;
+}
+.custom-editor {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.custom-input {
+  width: 100%;
+  resize: vertical;
+  line-height: 1.5;
+}
+.custom-editor-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* inline "new module" row under the sticky selector */
+.new-module {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.new-module .input {
+  flex: 1;
+  min-width: 0;
+}
+.target-flag {
+  color: var(--accent);
   font-weight: 600;
 }
 

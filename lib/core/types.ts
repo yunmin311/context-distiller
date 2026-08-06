@@ -57,7 +57,14 @@ export interface FragmentGroup {
   title: string;
   order: number;
   fragments: Fragment[];
+  /** User-added module (not one of the defaults). */
+  custom?: boolean;
+  /** Long-term module: recreated on future sessions (saved to local config). */
+  persist?: boolean;
 }
+
+/** session = only this session; persist = remembered long-term (local config). */
+export type PresetScope = 'session' | 'persist';
 
 /** The set of preset-button choices for the current compilation. */
 export interface PromptSelections {
@@ -102,4 +109,8 @@ export interface PresetOption {
   version: number;
   /** Optional one-line explanation shown in the UI. */
   hint?: string;
+  /** True for a user-defined requirement (editable / deletable in the UI). */
+  custom?: boolean;
+  /** For custom requirements: session-only or remembered long-term. */
+  scope?: PresetScope;
 }

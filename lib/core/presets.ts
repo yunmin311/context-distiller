@@ -7,9 +7,13 @@ import type { PresetGroupId, PresetOption } from './types';
  * never generates or rewrites these texts at runtime — they are authored,
  * hand-tested and versioned by the developer. The compiler simply looks them up
  * by id and concatenates them in a fixed order. See lib/core/compiler.ts.
+ *
+ * Categories are kept small (≤6 single-select options ≈ 2 grid rows) so the
+ * panel stays light. The additional-requirements group is the extensible one:
+ * it also hosts user-defined custom requirements at runtime.
  */
 
-export const PRESET_LIBRARY_VERSION = 2;
+export const PRESET_LIBRARY_VERSION = 3;
 
 /**
  * Step 1 of every compiled message: state that the material was hand-selected
@@ -20,7 +24,10 @@ export const BASE_TASK_PROMPT =
   '这些材料已由用户手动挑选，请只依据这些材料进行整理，不要引入材料之外的内容，' +
   '并生成可以脱离原始对话、独立阅读的结果。';
 
-/** 输出用途（单选）——本次要生成的东西是什么。 */
+/**
+ * 输出用途（单选）——本次要生成的东西是什么。
+ * 收敛为「整理长对话」最常见的六种成品：概要、笔记、学习稿、行动清单、续接上下文、成文初稿。
+ */
 export const INTENT_PRESETS: PresetOption[] = [
   {
     id: 'intent.quick-review',
@@ -47,12 +54,12 @@ export const INTENT_PRESETS: PresetOption[] = [
     text: '本次输出用途是学习版本：面向学习者整理，突出定义、原因、步骤、示例与常见误区，便于理解、记忆与复习。',
   },
   {
-    id: 'intent.research-log',
-    name: '研究记录',
+    id: 'intent.action-items',
+    name: '行动清单',
     group: 'intent',
     version: 1,
-    hint: '保留观点演变与未解决问题',
-    text: '本次输出用途是研究记录：保留观点的演变、证据、反例与未解决问题，作为可追溯的研究过程记录，而不是给出定论。',
+    hint: '提取待办、决定与下一步',
+    text: '本次输出用途是行动清单：从材料中提取需要执行的任务、已经做出的决定与明确的下一步，逐条列出；如材料中提到了前提、负责人或时间，请一并标出，材料中没有的不要编造。',
   },
   {
     id: 'intent.handoff',
@@ -61,14 +68,6 @@ export const INTENT_PRESETS: PresetOption[] = [
     version: 1,
     hint: '可直接发给新对话的上下文',
     text: '本次输出用途是对话续接：整理为可以直接发送给新对话的上下文，包含目标、已知背景、已完成内容、关键决定与剩余任务。',
-  },
-  {
-    id: 'intent.action-items',
-    name: '行动清单',
-    group: 'intent',
-    version: 1,
-    hint: '提取待办与下一步',
-    text: '本次输出用途是行动清单：从材料中提取需要执行的任务、待办事项与明确的下一步，逐条列出；如材料中提到了前提、负责人或时间，请一并标出，材料中没有的不要编造。',
   },
   {
     id: 'intent.draft',
@@ -144,16 +143,12 @@ export const STYLE_PRESETS: PresetOption[] = [
   },
 ];
 
-/** 输出结构（单选）——最终回答的形式。只是对 AI 的排版要求，不生成文件。 */
+/**
+ * 输出结构（单选）——最终回答的「组织形式」。只是对 AI 的排版要求，不生成文件。
+ * 注意：这里是内容如何组织，不是文件格式。Markdown / HTML / PDF 属于「标记语言 / 文件格式」，
+ * 不是组织方式——Markdown 已挪到「附加要求」，而本插件按设计不产出 HTML / PDF 文件。
+ */
 export const STRUCTURE_PRESETS: PresetOption[] = [
-  {
-    id: 'structure.markdown',
-    name: 'Markdown',
-    group: 'responseStructure',
-    version: 1,
-    hint: '标题层级 + Markdown',
-    text: '请使用 Markdown 格式输出，并建立清晰的标题层级。这是对文字排版的要求，不需要生成任何文件。',
-  },
   {
     id: 'structure.paragraphs',
     name: '连续段落',
@@ -201,7 +196,8 @@ export const STRUCTURE_PRESETS: PresetOption[] = [
  *
  * The order of this array is the canonical compile order: no matter what order
  * the user clicks these buttons, the compiler always emits them in this
- * sequence, so identical selections always produce identical output.
+ * sequence, so identical selections always produce identical output. User-added
+ * custom requirements are appended after these, in their own stable order.
  */
 export const EXTRA_PRESETS: PresetOption[] = [
   {
@@ -221,12 +217,12 @@ export const EXTRA_PRESETS: PresetOption[] = [
     text: '请保留专业术语的原始表述，不要替换、翻译或简化术语。',
   },
   {
-    id: 'extra.no-new-claims',
-    name: '禁止新增观点',
+    id: 'extra.keep-examples',
+    name: '保留示例',
     group: 'extras',
     version: 1,
-    hint: '不加材料外的观点',
-    text: '不得擅自加入材料中没有的新观点、结论或事实。',
+    hint: '示例与代码不省略',
+    text: '请保留材料中的示例与代码，不要省略或概括掉它们。',
   },
   {
     id: 'extra.keep-open-questions',
@@ -237,20 +233,12 @@ export const EXTRA_PRESETS: PresetOption[] = [
     text: '材料中未解决的问题必须保持为未解决状态，不要给出材料之外的答案。',
   },
   {
-    id: 'extra.merge-duplicates',
-    name: '合并重复',
+    id: 'extra.no-new-claims',
+    name: '禁止新增观点',
     group: 'extras',
     version: 1,
-    hint: '重复内容合成一处',
-    text: '请合并重复出现的内容，只保留一处完整表述，但不要因此丢失信息。',
-  },
-  {
-    id: 'extra.keep-examples',
-    name: '保留示例',
-    group: 'extras',
-    version: 1,
-    hint: '示例与代码不省略',
-    text: '请保留材料中的示例与代码，不要省略或概括掉它们。',
+    hint: '不加材料外的观点',
+    text: '不得擅自加入材料中没有的新观点、结论或事实。',
   },
   {
     id: 'extra.flag-uncertainty',
@@ -259,6 +247,22 @@ export const EXTRA_PRESETS: PresetOption[] = [
     version: 1,
     hint: '存疑内容要标出来',
     text: '对材料中不确定、有争议或未经验证的内容，请明确标注（例如注明“存疑”），不要当作已确认的结论输出。',
+  },
+  {
+    id: 'extra.merge-duplicates',
+    name: '合并重复',
+    group: 'extras',
+    version: 1,
+    hint: '重复内容合成一处',
+    text: '请合并重复出现的内容，只保留一处完整表述，但不要因此丢失信息。',
+  },
+  {
+    id: 'extra.use-markdown',
+    name: 'Markdown 排版',
+    group: 'extras',
+    version: 1,
+    hint: '用 Markdown 语法排版',
+    text: '请用 Markdown 语法排版（标题层级、列表、必要时代码块），这是对文字排版的要求，不需要生成任何文件。',
   },
   {
     id: 'extra.output-chinese',
@@ -296,7 +300,7 @@ export const ALL_PRESETS: PresetOption[] = [
 
 const PRESET_BY_ID = new Map<string, PresetOption>(ALL_PRESETS.map((p) => [p.id, p]));
 
-/** Look up a preset by id. Returns undefined for unknown ids. */
+/** Look up a built-in preset by id. Returns undefined for unknown/custom ids. */
 export function getPreset(id: string): PresetOption | undefined {
   return id ? PRESET_BY_ID.get(id) : undefined;
 }

@@ -100,8 +100,8 @@ export function App() {
   }, [handleLoad]);
 
   const result = useMemo(
-    () => compile(state.groups, state.selections),
-    [state.groups, state.selections],
+    () => compile(state.groups, state.selections, { customExtras: state.customExtras }),
+    [state.groups, state.selections, state.customExtras],
   );
 
   // Message ids already added as a whole message — used to prevent duplicates.
@@ -238,6 +238,7 @@ export function App() {
                 groups={state.groups}
                 activeGroupId={activeGroupId}
                 onSetActive={setActiveGroupId}
+                onAddGroup={actions.addGroup}
                 onAdd={(m) => {
                   actions.addMessageFragment(m, activeGroupId);
                   setToast({ text: `已加入到「${activeGroup?.title}」`, tone: 'ok' });
@@ -255,12 +256,10 @@ export function App() {
               <GroupBoard
                 groups={state.groups}
                 activeGroupId={activeGroupId}
-                onSetActive={setActiveGroupId}
                 onMove={actions.moveFragment}
                 onMoveToGroup={actions.moveToGroup}
                 onRemove={actions.removeFragment}
                 onSetNote={actions.setNote}
-                onAddGroup={actions.addGroup}
                 onRemoveGroup={actions.removeGroup}
               />
             </section>
@@ -269,8 +268,14 @@ export function App() {
               <div className="eyebrow">预设 Prompt</div>
               <PresetBar
                 selections={state.selections}
+                customExtras={state.customExtras}
                 onSetSingle={actions.setSingle}
                 onToggleExtra={actions.toggleExtra}
+                onAddCustom={(text, persist) =>
+                  actions.addCustomExtra(text, text, persist ? 'persist' : 'session')
+                }
+                onUpdateCustom={(id, text) => actions.updateCustomExtra(id, text, text)}
+                onRemoveCustom={actions.removeCustomExtra}
               />
             </section>
           </>

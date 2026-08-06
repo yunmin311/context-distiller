@@ -11,7 +11,9 @@ export default defineConfig({
     // Keep in sync with package.json; WXT reads the version from package.json.
     description:
       'A temporary material-selection + Prompt-compilation workbench beside AI chats. MVP: ChatGPT. No model API, no server, no persistence, never auto-sends.',
-    permissions: ['sidePanel', 'scripting'],
+    // storage: only for the user's own long-term modules / custom requirements
+    // (config), never conversation data.
+    permissions: ['sidePanel', 'scripting', 'storage'],
     host_permissions: ['*://chatgpt.com/*', '*://chat.openai.com/*'],
     action: {
       default_title: 'Open Context Distiller',

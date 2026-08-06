@@ -1,4 +1,4 @@
-import type { FragmentGroup, PromptSelections } from './types';
+import type { FragmentGroup, PresetOption, PromptSelections } from './types';
 import { BASE_TASK_PROMPT, EXTRA_PRESETS, getPreset } from './presets';
 
 /**
@@ -23,6 +23,12 @@ import { BASE_TASK_PROMPT, EXTRA_PRESETS, getPreset } from './presets';
 export interface CompileOptions {
   /** Emit `【title】` headers for groups that contain no fragments. Default: false. */
   includeEmptyGroups?: boolean;
+  /**
+   * User-defined requirements, appended after the built-in extras in their own
+   * stable array order. They compile exactly like built-in extras — the plugin
+   * still does no AI rewriting; it just concatenates the user's own text.
+   */
+  customExtras?: PresetOption[];
 }
 
 export interface CompileResult {
@@ -69,9 +75,10 @@ export function compile(
     }
   }
 
-  // --- 6: extras, always emitted in the library's canonical order -------
+  // --- 6: extras, always emitted in canonical order (built-ins, then customs)
   const selectedExtras = new Set(selections.extras ?? []);
-  for (const preset of EXTRA_PRESETS) {
+  const allExtras = [...EXTRA_PRESETS, ...(options.customExtras ?? [])];
+  for (const preset of allExtras) {
     if (selectedExtras.has(preset.id)) {
       instructionLines.push(preset.text);
       usedPresetIds.push(preset.id);
