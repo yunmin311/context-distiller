@@ -1,4 +1,5 @@
 import type { FragmentGroup } from '../../../lib/core/types';
+import { plainify } from '../../../lib/utils/plainify';
 
 interface GroupBoardProps {
   groups: FragmentGroup[];
@@ -85,7 +86,7 @@ export function GroupBoard({
                           ✕
                         </button>
                       </div>
-                      <div className="frag-text">{fragment.text}</div>
+                      <div className="frag-text">{plainify(fragment.text)}</div>
                       <div className="frag-foot">
                         <input
                           className="input note-input"

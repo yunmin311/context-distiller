@@ -250,17 +250,19 @@ export function App() {
               />
             </section>
 
-            <section className="section">
-              <div className="eyebrow">整理工作区</div>
-              <GroupBoard
-                groups={state.groups}
-                onMove={actions.moveFragment}
-                onMoveToGroup={actions.moveToGroup}
-                onRemove={actions.removeFragment}
-                onSetNote={actions.setNote}
-                onRemoveGroup={actions.removeGroup}
-              />
-            </section>
+            {result.fragmentCount > 0 && (
+              <section className="section">
+                <div className="eyebrow">整理工作区</div>
+                <GroupBoard
+                  groups={state.groups}
+                  onMove={actions.moveFragment}
+                  onMoveToGroup={actions.moveToGroup}
+                  onRemove={actions.removeFragment}
+                  onSetNote={actions.setNote}
+                  onRemoveGroup={actions.removeGroup}
+                />
+              </section>
+            )}
 
             <section className="section">
               <div className="eyebrow">预设 Prompt</div>

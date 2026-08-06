@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { ConversationMessage, FragmentGroup } from '../../../lib/core/types';
 import type { SelectionInput } from '../useDistiller';
+import { plainify } from '../../../lib/utils/plainify';
 
 interface MessageListProps {
   messages: ConversationMessage[];
@@ -223,9 +224,11 @@ export function MessageList({
       </p>
 
       {filtered.map((message) => {
-        const isLong = message.text.length > CLAMP_CHARS;
+        // Show a readable, de-Markdown'd version; the stored text stays original.
+        const readable = plainify(message.text);
+        const isLong = readable.length > CLAMP_CHARS;
         const open = expanded.has(message.id);
-        const shown = isLong && !open ? message.text.slice(0, CLAMP_CHARS).trimEnd() + '…' : message.text;
+        const shown = isLong && !open ? readable.slice(0, CLAMP_CHARS).trimEnd() + '…' : readable;
         const added = addedIds.has(message.id);
         return (
           <article

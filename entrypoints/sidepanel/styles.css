@@ -435,10 +435,10 @@ textarea:focus,
   line-height: 1.6;
   color: var(--ink);
 }
+/* Expanded: show the whole message inline — no inner scroll cap. */
 .msg-body-open {
-  max-height: 250px;
-  overflow-y: auto;
-  padding-right: 4px;
+  max-height: none;
+  overflow: visible;
 }
 
 .tag {

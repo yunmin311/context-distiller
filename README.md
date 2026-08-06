@@ -18,15 +18,19 @@
 
 </div>
 
-<img src="docs/screenshots/messages.png" width="860" alt="Context Distiller 停靠在 ChatGPT 对话右侧：读取消息、划词加片段、整条加入" />
+<div align="center">
 
-<sub>停靠在 ChatGPT 对话旁 · 读取消息 · 划词加片段 · 整条加入</sub>
+<img src="docs/screenshots/messages.png" width="880" alt="Context Distiller 停靠在真实 ChatGPT 对话右侧，读取当前对话并选材" />
 
-<br />
+<sub>真实运行截图 · 停靠在 ChatGPT 对话旁读取当前对话 · 划词加片段 / 整条加入</sub>
 
-<img src="docs/screenshots/workspace.png" width="340" alt="侧边栏工作区：模块编组 + 预设 Prompt + 一键编译" />
+<br /><br />
 
-<sub>模块编组 · 预设 Prompt（用途 / 密度 / 文风 / 结构 / 格式 / 附加要求）· 一键编译</sub>
+<img src="docs/screenshots/workspace.png" width="330" alt="侧边栏特写：干净读取（自动去除 Markdown 标记）与预设 Prompt" />
+
+<sub>侧边栏特写 · 读取时自动去除 Markdown 标记、阅读干净 · 预设 Prompt 一键编译</sub>
+
+</div>
 
 ---
 
@@ -56,7 +60,8 @@ Context Distiller 解决的不是「让插件自己总结对话」，而是「�
 
 ## 核心功能
 
-- **对话读取**：主世界读 ChatGPT 内部 React 数据（代码块更准）+ DOM 回退双路径，区分用户 / AI。
+- **对话读取**：主世界读 ChatGPT 内部 React 数据（代码块更准）+ DOM 回退双路径，区分用户 / AI；
+  侧边栏显示时自动去除 Markdown 标记（`##`、`**`、`>` 等），阅读干净，编译给 AI 的原文保留。
 - **多粒度选材**：整条消息、问答组合、或**在消息里划词**即时提取片段。
 - **临时编组**：默认「框架 / 正文 / 补充 / 复盘 / 关键语句」五模块，可排序、备注、增删；
   顶部常驻选择器随时切换「加入目标」并新建模块（可选「本次 / 长期」）。
