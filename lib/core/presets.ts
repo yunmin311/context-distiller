@@ -9,7 +9,7 @@ import type { PresetGroupId, PresetOption } from './types';
  * by id and concatenates them in a fixed order. See lib/core/compiler.ts.
  */
 
-export const PRESET_LIBRARY_VERSION = 1;
+export const PRESET_LIBRARY_VERSION = 2;
 
 /**
  * Step 1 of every compiled message: state that the material was hand-selected
@@ -61,6 +61,22 @@ export const INTENT_PRESETS: PresetOption[] = [
     version: 1,
     hint: '可直接发给新对话的上下文',
     text: '本次输出用途是对话续接：整理为可以直接发送给新对话的上下文，包含目标、已知背景、已完成内容、关键决定与剩余任务。',
+  },
+  {
+    id: 'intent.action-items',
+    name: '行动清单',
+    group: 'intent',
+    version: 1,
+    hint: '提取待办与下一步',
+    text: '本次输出用途是行动清单：从材料中提取需要执行的任务、待办事项与明确的下一步，逐条列出；如材料中提到了前提、负责人或时间，请一并标出，材料中没有的不要编造。',
+  },
+  {
+    id: 'intent.draft',
+    name: '成文初稿',
+    group: 'intent',
+    version: 1,
+    hint: '整理成可直接阅读的文稿',
+    text: '本次输出用途是成文初稿：把材料整理成一篇可以直接阅读或发布的连续文稿，有清晰的开头、主体与结尾，读者无需看到原始对话即可理解；只依据材料整理，不额外扩写。',
   },
 ];
 
@@ -162,6 +178,22 @@ export const STRUCTURE_PRESETS: PresetOption[] = [
     hint: '适合对比处用表格',
     text: '当内容适合对比或结构化呈现时，请使用表格；其余部分保持正常排版，不需要生成任何文件。',
   },
+  {
+    id: 'structure.qa',
+    name: '问答形式',
+    group: 'responseStructure',
+    version: 1,
+    hint: '整理成问题 + 回答',
+    text: '请以问答（Q&A）形式输出：把内容组织成若干「问题 + 回答」，便于复习与查阅。这是对文字排版的要求，不需要生成任何文件。',
+  },
+  {
+    id: 'structure.steps',
+    name: '步骤清单',
+    group: 'responseStructure',
+    version: 1,
+    hint: '带编号、可依次执行',
+    text: '请以带编号的步骤清单输出，每一步单独成条、可依次执行，必要时说明每步的目的或前提。这是对文字排版的要求，不需要生成任何文件。',
+  },
 ];
 
 /**
@@ -177,6 +209,7 @@ export const EXTRA_PRESETS: PresetOption[] = [
     name: '保留关键原句',
     group: 'extras',
     version: 1,
+    hint: '关键原句不改写',
     text: '请保留材料中的关键原句，对这些句子不要改写或删减。',
   },
   {
@@ -184,6 +217,7 @@ export const EXTRA_PRESETS: PresetOption[] = [
     name: '保留术语',
     group: 'extras',
     version: 1,
+    hint: '术语保留原文',
     text: '请保留专业术语的原始表述，不要替换、翻译或简化术语。',
   },
   {
@@ -191,6 +225,7 @@ export const EXTRA_PRESETS: PresetOption[] = [
     name: '禁止新增观点',
     group: 'extras',
     version: 1,
+    hint: '不加材料外的观点',
     text: '不得擅自加入材料中没有的新观点、结论或事实。',
   },
   {
@@ -198,21 +233,32 @@ export const EXTRA_PRESETS: PresetOption[] = [
     name: '保留未解决问题',
     group: 'extras',
     version: 1,
+    hint: '悬而未决的保持原样',
     text: '材料中未解决的问题必须保持为未解决状态，不要给出材料之外的答案。',
-  },
-  {
-    id: 'extra.merge-duplicates',
-    name: '合并重复',
-    group: 'extras',
-    version: 1,
-    text: '请合并重复出现的内容，只保留一处完整表述，但不要因此丢失信息。',
   },
   {
     id: 'extra.keep-examples',
     name: '保留示例',
     group: 'extras',
     version: 1,
+    hint: '示例与代码不省略',
     text: '请保留材料中的示例与代码，不要省略或概括掉它们。',
+  },
+  {
+    id: 'extra.flag-uncertainty',
+    name: '标注不确定',
+    group: 'extras',
+    version: 1,
+    hint: '存疑内容要标出来',
+    text: '对材料中不确定、有争议或未经验证的内容，请明确标注（例如注明“存疑”），不要当作已确认的结论输出。',
+  },
+  {
+    id: 'extra.output-chinese',
+    name: '用中文输出',
+    group: 'extras',
+    version: 1,
+    hint: '术语 / 代码保留原文',
+    text: '请用简体中文输出最终内容；材料中的专有名词、术语与代码保留原文，不做翻译。',
   },
 ];
 

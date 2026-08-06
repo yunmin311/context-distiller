@@ -116,8 +116,11 @@ async function getConversation(): Promise<PanelResponse> {
   let raw: RawMessage[];
   let source: MessageSource;
 
-  // Prefer the page's internal data (better text), fall back to DOM.
-  const mw = await requestMainWorld(700);
+  // Prefer the page's internal data (better text), fall back to DOM. The bridge
+  // is injected at document_idle and normally answers in a few ms; the short
+  // window only bites on the very first read before it has registered, and DOM
+  // extraction (still good) covers that case.
+  const mw = await requestMainWorld(450);
   if (mw?.ok && mw.messages && mw.messages.length > 0) {
     raw = mw.messages.map((m) => ({
       id: m.id,

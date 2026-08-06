@@ -7,6 +7,16 @@ export async function getActiveTab() {
 }
 
 /**
+ * Is the active tab a supported ChatGPT conversation page? Used to auto-read on
+ * open only when it makes sense — the URL is readable because we hold host
+ * permissions for these origins.
+ */
+export async function activeTabIsSupported(): Promise<boolean> {
+  const tab = await getActiveTab();
+  return !!tab?.url && /^https?:\/\/(chatgpt\.com|chat\.openai\.com)\//.test(tab.url);
+}
+
+/**
  * Send a typed request to the content script in the active tab. Never throws —
  * connectivity problems (wrong page, content script not injected yet) come back
  * as a `{ kind: 'error' }` response so the UI can show a friendly message.

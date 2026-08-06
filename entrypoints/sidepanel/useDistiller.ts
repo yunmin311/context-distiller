@@ -67,6 +67,7 @@ type Action =
       source: MessageSource;
     }
   | { type: 'load-error'; error: string }
+  | { type: 'reset' }
   | { type: 'add-fragment'; groupId: string; fragment: Fragment }
   | { type: 'remove-fragment'; groupId: string; fragmentId: string }
   | { type: 'move-fragment'; groupId: string; fragmentId: string; dir: -1 | 1 }
@@ -104,6 +105,17 @@ function reducer(state: DistillerState, action: Action): DistillerState {
 
     case 'load-error':
       return { ...state, status: 'error', error: action.error };
+
+    case 'reset':
+      return {
+        ...state,
+        status: 'idle',
+        error: undefined,
+        conversation: undefined,
+        messages: [],
+        partial: false,
+        source: undefined,
+      };
 
     case 'add-fragment':
       return {
@@ -224,18 +236,21 @@ function reducer(state: DistillerState, action: Action): DistillerState {
 export function useDistiller() {
   const [state, dispatch] = useReducer(reducer, undefined, initialState);
 
-  const loadConversation = useCallback(async () => {
-    dispatch({ type: 'load-start' });
-    const res = await sendToActiveTab({ kind: 'get-conversation' });
-    if (res.kind === 'conversation' && res.ok) {
-      dispatch({
-        type: 'load-success',
-        conversation: res.conversation,
-        messages: res.messages,
-        partial: res.partial,
-        source: res.source,
-      });
-    } else {
+  /** Outcome of a load, returned so the caller can show a transient hint. */
+  const loadConversation = useCallback(
+    async (): Promise<{ ok: boolean; count: number; partial: boolean }> => {
+      dispatch({ type: 'load-start' });
+      const res = await sendToActiveTab({ kind: 'get-conversation' });
+      if (res.kind === 'conversation' && res.ok) {
+        dispatch({
+          type: 'load-success',
+          conversation: res.conversation,
+          messages: res.messages,
+          partial: res.partial,
+          source: res.source,
+        });
+        return { ok: true, count: res.messages.length, partial: res.partial };
+      }
       const error =
         res.kind === 'conversation' && !res.ok
           ? res.error
@@ -243,8 +258,10 @@ export function useDistiller() {
             ? res.error
             : '读取对话失败。';
       dispatch({ type: 'load-error', error });
-    }
-  }, []);
+      return { ok: false, count: 0, partial: false };
+    },
+    [],
+  );
 
   const addMessageFragment = useCallback(
     (message: ConversationMessage, groupId: string) => {
@@ -295,6 +312,7 @@ export function useDistiller() {
         dispatch({ type: 'set-single', key, presetId }),
       toggleExtra: (presetId: string) => dispatch({ type: 'toggle-extra', presetId }),
       clearMaterial: () => dispatch({ type: 'clear-material' }),
+      reset: () => dispatch({ type: 'reset' }),
     }),
     [loadConversation, addMessageFragment, addSelection],
   );

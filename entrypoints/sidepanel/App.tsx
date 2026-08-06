@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { compile } from '../../lib/core/compiler';
 import type { ConversationMessage } from '../../lib/core/types';
 import { useDistiller, type SelectionInput } from './useDistiller';
-import { copyText, sendToActiveTab } from './messaging';
+import { activeTabIsSupported, copyText, sendToActiveTab } from './messaging';
 import { MessageList } from './components/MessageList';
 import { GroupBoard } from './components/GroupBoard';
 import { PresetBar } from './components/PresetBar';
@@ -52,6 +52,38 @@ export function App() {
     const timer = setTimeout(() => setToast(null), 2800);
     return () => clearTimeout(timer);
   }, [toast]);
+
+  // Read the conversation, then flash a brief status toast instead of keeping a
+  // permanent banner. On a silent auto-read (panel just opened) a failure quietly
+  // returns to the intro rather than throwing up an error screen.
+  const handleLoad = useCallback(
+    async (silent = false) => {
+      const res = await actions.loadConversation();
+      if (res.ok) {
+        setToast({
+          text: res.partial
+            ? `已读取 ${res.count} 条 · 超长对话可向上滚动加载后再刷新`
+            : `已读取 ${res.count} 条消息`,
+          tone: 'ok',
+        });
+      } else if (silent) {
+        actions.reset();
+      }
+    },
+    [actions],
+  );
+
+  // Auto-read on open when the active tab is a ChatGPT page, so the panel lands
+  // straight on the messages instead of an extra click.
+  useEffect(() => {
+    let cancelled = false;
+    void activeTabIsSupported().then((ok) => {
+      if (ok && !cancelled) void handleLoad(true);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [handleLoad]);
 
   const result = useMemo(
     () => compile(state.groups, state.selections),
@@ -143,7 +175,7 @@ export function App() {
         <button
           className="icon-btn topbar-refresh"
           title="读取 / 刷新当前对话"
-          onClick={() => actions.loadConversation()}
+          onClick={() => handleLoad()}
         >
           {state.status === 'loading' ? (
             <span className="spin">
@@ -163,7 +195,7 @@ export function App() {
               在 ChatGPT 对话页读取消息，挑出真正有用的整条或片段，分组、点预设按钮，
               生成一段纯文本，复制或填回输入框。不调用模型、不保存、不自动发送。
             </p>
-            <button className="btn btn-primary" onClick={() => actions.loadConversation()}>
+            <button className="btn btn-primary" onClick={() => handleLoad()}>
               读取当前对话
             </button>
             <p className="hint tiny">仅在 chatgpt.com / chat.openai.com 生效。</p>
@@ -176,7 +208,7 @@ export function App() {
           <div className="notice notice-error">
             <strong>读取失败</strong>
             <p className="muted tiny">{state.error}</p>
-            <button className="btn btn-outline btn-sm" onClick={() => actions.loadConversation()}>
+            <button className="btn btn-outline btn-sm" onClick={() => handleLoad()}>
               重试
             </button>
           </div>
@@ -184,12 +216,6 @@ export function App() {
 
         {state.status === 'ready' && (
           <>
-            {state.partial && (
-              <p className="hint tiny partial-note">
-                只读到已加载的消息。超长对话请向上滚动加载后再点刷新。
-              </p>
-            )}
-
             <section className="section">
               <div className="eyebrow">对话消息</div>
               <MessageList
