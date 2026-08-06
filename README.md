@@ -20,15 +20,19 @@
 
 <div align="center">
 
-<img src="docs/screenshots/messages.png" width="880" alt="Context Distiller 停靠在真实 ChatGPT 对话右侧，读取当前对话并选材" />
+<img src="docs/screenshots/messages.png" width="600" alt="Context Distiller 停靠在真实 ChatGPT 对话旁，读取当前对话并选材" />
 
-<sub>真实运行截图 · 停靠在 ChatGPT 对话旁读取当前对话 · 划词加片段 / 整条加入</sub>
+<sub>真实运行截图 · 停靠在 ChatGPT 对话旁读取当前对话 · 划词 / 整条选材（侧边栏自动去除 Markdown 标记，阅读干净）</sub>
 
 <br /><br />
 
-<img src="docs/screenshots/workspace.png" width="330" alt="侧边栏特写：干净读取（自动去除 Markdown 标记）与预设 Prompt" />
+<img src="docs/screenshots/workspace.png" width="248" alt="模块编组与预设 Prompt" />
+&nbsp;&nbsp;
+<img src="docs/screenshots/preview.png" width="248" alt="预览「确定性编译」出的完整提示词" />
 
-<sub>侧边栏特写 · 读取时自动去除 Markdown 标记、阅读干净 · 预设 Prompt 一键编译</sub>
+<br />
+
+<sub>模块编组 + 预设 Prompt&nbsp;&nbsp;·&nbsp;&nbsp;预览确定性编译出的完整提示词（编译输出保留原始 Markdown）</sub>
 
 </div>
 
