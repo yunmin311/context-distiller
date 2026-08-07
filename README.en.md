@@ -156,6 +156,10 @@ Least privilege, least retention. It runs only on chatgpt.com / chat.openai.com,
 - **Beta** ◻ virtual-list enhancements, search-to-locate, selector resilience, keyboard shortcuts, error recovery
 - **Later** ◻ Claude / Gemini adapters, more validated presets, optional user-defined presets
 
+## Changelog
+
+Per-version changes are in [CHANGELOG.md](CHANGELOG.md).
+
 ## License
 
 [MIT](LICENSE)

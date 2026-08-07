@@ -169,6 +169,10 @@ pnpm test
 - **Beta** ◻ 虚拟列表增强、搜索定位、选择器容错、快捷键、错误恢复
 - **后续** ◻ Claude / Gemini 适配、更多经过验证的预设、可选用户自定义预设
 
+## 更新日志
+
+每个版本的变更见 [CHANGELOG.md](CHANGELOG.md)。
+
 ## 许可
 
 [MIT](LICENSE)
