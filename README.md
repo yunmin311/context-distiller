@@ -8,6 +8,8 @@
 
 在你把材料交给 AI 之前，把材料的**选择权、组织权和生成指令的控制权**交回给你。
 
+**中文** · [English](README.en.md)
+
 ![Manifest V3](https://img.shields.io/badge/Manifest-V3-1f1f1f)
 ![WXT](https://img.shields.io/badge/built%20with-WXT-1f1f1f)
 ![React](https://img.shields.io/badge/React-19-1f1f1f)
@@ -20,7 +22,7 @@
 
 <div align="center">
 
-<img src="docs/screenshots/messages.png" width="480" alt="Context Distiller 停靠在真实 ChatGPT 对话旁，读取当前对话并选材" />
+<img src="docs/screenshots/messages.png" width="600" alt="Context Distiller 停靠在真实 ChatGPT 对话旁，读取当前对话并选材" />
 
 <sub>真实运行截图 · 停靠在 ChatGPT 对话旁读取当前对话 · 划词 / 整条选材（侧边栏自动去除 Markdown 标记，阅读干净）</sub>
 
