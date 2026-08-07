@@ -20,10 +20,17 @@ export async function activeTabIsSupported(): Promise<boolean> {
  * Reload the active tab. Used by "重试" so the user doesn't have to refresh the
  * page by hand — most read failures are just a not-yet-ready content script.
  * Works with our host permissions; no extra "tabs" permission needed.
+ *
+ * Guarded to a ChatGPT tab: the side panel always talks to whatever tab is
+ * focused, so without this check a user who switched to another tab (a doc, a
+ * form) and hit 重试 would reload THAT tab and lose its unsaved state. If the
+ * focused tab is not a supported page we refuse and let the caller explain.
  */
 export async function reloadActiveTab(): Promise<boolean> {
   const tab = await getActiveTab();
-  if (!tab?.id) return false;
+  if (!tab?.id || !tab.url || !/^https?:\/\/(chatgpt\.com|chat\.openai\.com)\//.test(tab.url)) {
+    return false;
+  }
   try {
     await browser.tabs.reload(tab.id);
     return true;

@@ -13,6 +13,13 @@ interface Toast {
   tone: 'ok' | 'warn' | 'error';
 }
 
+/** A custom requirement's chip shows a short one-line label; the full text still
+ *  compiles verbatim. Keeps a long paste from stretching the chip off-screen. */
+function chipLabel(text: string): string {
+  const oneLine = text.trim().replace(/\s+/g, ' ');
+  return oneLine.length > 14 ? oneLine.slice(0, 14) + '…' : oneLine;
+}
+
 // Logo — "Aperture": two chevrons converging to a point (distillation to essence).
 function Logo() {
   return (
@@ -272,9 +279,9 @@ export function App() {
                 onSetSingle={actions.setSingle}
                 onToggleExtra={actions.toggleExtra}
                 onAddCustom={(text, persist) =>
-                  actions.addCustomExtra(text, text, persist ? 'persist' : 'session')
+                  actions.addCustomExtra(chipLabel(text), text, persist ? 'persist' : 'session')
                 }
-                onUpdateCustom={(id, text) => actions.updateCustomExtra(id, text, text)}
+                onUpdateCustom={(id, text) => actions.updateCustomExtra(id, chipLabel(text), text)}
                 onRemoveCustom={actions.removeCustomExtra}
               />
             </section>

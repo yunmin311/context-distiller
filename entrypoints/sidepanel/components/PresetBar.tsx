@@ -187,6 +187,7 @@ export function PresetBar({
                   className="input custom-input"
                   autoFocus
                   rows={2}
+                  maxLength={1000}
                   placeholder="写一条要求，会原样拼进消息里，例如：请标注每条结论对应材料里的哪一段"
                   value={draft}
                   onChange={(e) => setDraft(e.target.value)}

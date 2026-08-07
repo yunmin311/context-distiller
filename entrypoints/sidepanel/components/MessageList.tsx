@@ -65,6 +65,12 @@ export function MessageList({
     return messages.filter((m) => m.text.toLowerCase().includes(q));
   }, [messages, filter]);
 
+  // De-Markdown each message once per load, not on every keystroke/re-render.
+  const readables = useMemo(
+    () => new Map(messages.map((m) => [m.id, plainify(m.text)] as const)),
+    [messages],
+  );
+
   // Dismiss the highlight chip whenever the panel scrolls or resizes — its
   // position is fixed to the viewport and would otherwise drift.
   useEffect(() => {
@@ -178,6 +184,7 @@ export function MessageList({
           <input
             className="input"
             autoFocus
+            maxLength={40}
             placeholder="新模块名称"
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
@@ -225,7 +232,7 @@ export function MessageList({
 
       {filtered.map((message) => {
         // Show a readable, de-Markdown'd version; the stored text stays original.
-        const readable = plainify(message.text);
+        const readable = readables.get(message.id) ?? message.text;
         const isLong = readable.length > CLAMP_CHARS;
         const open = expanded.has(message.id);
         const shown = isLong && !open ? readable.slice(0, CLAMP_CHARS).trimEnd() + '…' : readable;

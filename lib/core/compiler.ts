@@ -104,7 +104,7 @@ export function compile(
     const header = `【${group.title}】`;
     const fragmentBlocks = fragments.map((fragment) => {
       fragmentCount += 1;
-      const body = fragment.text.replace(/\s+$/u, ''); // trim trailing whitespace only
+      const body = fragment.text.trimEnd(); // drop trailing whitespace (was /\s+$/)
       const note = fragment.note?.trim();
       return note ? `${body}\n（备注：${note}）` : body;
     });

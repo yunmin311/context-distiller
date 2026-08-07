@@ -391,7 +391,14 @@ export function useDistiller() {
   const retryWithReload = useCallback(
     async (): Promise<{ ok: boolean; count: number; partial: boolean }> => {
       dispatch({ type: 'load-start' });
-      await reloadActiveTab();
+      const reloaded = await reloadActiveTab();
+      if (!reloaded) {
+        dispatch({
+          type: 'load-error',
+          error: '请先切换到并聚焦 ChatGPT 对话标签页（chatgpt.com），再点重试。',
+        });
+        return { ok: false, count: 0, partial: false };
+      }
       for (let attempt = 0; attempt < 14; attempt += 1) {
         await delay(700);
         const res = await sendToActiveTab({ kind: 'get-conversation' });
