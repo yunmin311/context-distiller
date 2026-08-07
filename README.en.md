@@ -28,13 +28,13 @@ Before you hand material to the AI, it hands the **choice of what, the way it's 
 
 <br /><br />
 
-<img src="docs/screenshots/workspace.png" width="212" alt="Module board and preset Prompts" />
+<img src="docs/screenshots/workspace.png" width="212" alt="All preset Prompts at a glance: purpose / density / style / structure / format + extras" />
 &nbsp;&nbsp;
 <img src="docs/screenshots/preview.png" width="212" alt="Preview of the deterministically compiled full prompt" />
 
 <br />
 
-<sub>Module board + preset Prompts&nbsp;&nbsp;·&nbsp;&nbsp;preview of the deterministically compiled prompt (the compiled output keeps the original Markdown)</sub>
+<sub>All preset Prompts at a glance (purpose / density / style / structure / format + extras)&nbsp;&nbsp;·&nbsp;&nbsp;preview of the deterministically compiled prompt (keeps the original Markdown)</sub>
 
 </div>
 

@@ -28,13 +28,13 @@
 
 <br /><br />
 
-<img src="docs/screenshots/workspace.png" width="212" alt="模块编组与预设 Prompt" />
+<img src="docs/screenshots/workspace.png" width="212" alt="预设 Prompt 全景：用途 / 密度 / 文风 / 结构 / 格式 + 附加要求" />
 &nbsp;&nbsp;
 <img src="docs/screenshots/preview.png" width="212" alt="预览「确定性编译」出的完整提示词" />
 
 <br />
 
-<sub>模块编组 + 预设 Prompt&nbsp;&nbsp;·&nbsp;&nbsp;预览确定性编译出的完整提示词（编译输出保留原始 Markdown）</sub>
+<sub>全部预设一览（用途 / 密度 / 文风 / 结构 / 格式 + 附加要求）&nbsp;&nbsp;·&nbsp;&nbsp;预览确定性编译出的完整提示词（保留原始 Markdown）</sub>
 
 </div>
 
