@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Reworded the **对话续接 (handoff)** preset to explicitly cover migrating the
+  distilled context into a new conversation or a different model, and note in
+  the README that opening the side panel auto-reads the current conversation.
+
 ## [0.1.0] — 2026-08-07
 
 First public MVP: a side-panel workbench beside ChatGPT that hands the choice of

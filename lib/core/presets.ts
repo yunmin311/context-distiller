@@ -13,7 +13,7 @@ import type { PresetGroupId, PresetOption } from './types';
  * it also hosts user-defined custom requirements at runtime.
  */
 
-export const PRESET_LIBRARY_VERSION = 3;
+export const PRESET_LIBRARY_VERSION = 4;
 
 /**
  * Step 1 of every compiled message: state that the material was hand-selected
@@ -65,9 +65,12 @@ export const INTENT_PRESETS: PresetOption[] = [
     id: 'intent.handoff',
     name: '对话续接',
     group: 'intent',
-    version: 1,
-    hint: '可直接发给新对话的上下文',
-    text: '本次输出用途是对话续接：整理为可以直接发送给新对话的上下文，包含目标、已知背景、已完成内容、关键决定与剩余任务。',
+    version: 2,
+    hint: '迁移到新对话 / 新模型的交接上下文',
+    text:
+      '本次输出用途是对话续接 / 迁移：整理成一段可以直接粘贴到新对话（也可以是换一个模型、开一个新窗口）的交接上下文，' +
+      '让新对话无需看到原始对话即可继续——包含目标、已知背景、已完成内容与关键决定、当前进度，以及剩余任务 / 下一步；' +
+      '只依据材料整理，不编造。',
   },
   {
     id: 'intent.draft',
