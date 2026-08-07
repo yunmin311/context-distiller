@@ -58,7 +58,7 @@ By design it is deliberately **quiet and blends into ChatGPT**: neutral colors, 
 | Preset Prompts → compile plain text in a fixed order | Auto-send messages |
 | Copy / fill back into the composer | Server, account, cloud sync |
 
-Once you close or refresh the side panel, **the material you organized is gone** — a deliberate product trade-off (so it never turns into a note vault). The only thing you can optionally keep is your own config: the custom module names and custom requirements you mark "long-term" (stored locally, never conversation content). See the [Privacy notes](docs/PRIVACY.md).
+**By default**, once you close or refresh the side panel **the material you organized is gone** — a deliberate trade-off (so it never turns into a note vault). If you want it back, flip the **"记住本次整理" (remember this session) toggle** at the bottom (**off by default**): the current conversation and your organizing are **snapshotted locally** and restored verbatim next time — local-only, never uploaded, cleared the moment you turn it off. Separately, the custom module names and requirements you mark "long-term" also persist (local config, never conversation content). See the [Privacy notes](docs/PRIVACY.md).
 
 ## Core features
 

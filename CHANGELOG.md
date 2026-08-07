@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Opt-in **"记住本次整理"** toggle in the footer (off by default): snapshots the
+  current conversation + selected material + preset choices to local storage so
+  reopening the panel restores them verbatim. Local-only, never uploaded, and
+  purged the moment you turn it off. The privacy default — nothing
+  conversation-related persisted — is unchanged.
+
 ### Changed
 - Reworded the **对话续接 (handoff)** preset to explicitly cover migrating the
   distilled context into a new conversation or a different model, and note in

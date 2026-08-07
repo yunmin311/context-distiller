@@ -12,6 +12,7 @@ import type {
 import { createId } from '../../lib/utils/id';
 import { reloadActiveTab, sendToActiveTab } from './messaging';
 import { loadPrefs, savePrefs, type Prefs } from './prefs';
+import { loadSession, saveSession, clearSession, type SessionSnapshot } from './session';
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -44,6 +45,8 @@ export interface DistillerState {
   selections: PromptSelections;
   /** User-defined requirements (session + long-term), appended after built-ins. */
   customExtras: PresetOption[];
+  /** Opt-in: persist this session (conversation + material) and restore on reopen. */
+  rememberSession: boolean;
   /** True once long-term config has been loaded, so we don't save over it. */
   hydrated: boolean;
 }
@@ -76,6 +79,7 @@ function initialState(): DistillerState {
     groups: createDefaultGroups(),
     selections: emptySelections(),
     customExtras: [],
+    rememberSession: false,
     hydrated: false,
   };
 }
@@ -103,7 +107,8 @@ type Action =
   | { type: 'add-custom-extra'; option: PresetOption }
   | { type: 'update-custom-extra'; id: string; name: string; text: string }
   | { type: 'remove-custom-extra'; id: string }
-  | { type: 'hydrate-prefs'; prefs: Prefs }
+  | { type: 'hydrate-prefs'; prefs: Prefs; snapshot: SessionSnapshot | null }
+  | { type: 'set-remember'; value: boolean }
   | { type: 'clear-material' };
 
 function mapGroup(
@@ -280,9 +285,27 @@ function reducer(state: DistillerState, action: Action): DistillerState {
       };
 
     case 'hydrate-prefs': {
+      const { prefs, snapshot } = action;
+      // Opt-in full restore: use the saved working set verbatim ("原样恢复").
+      if (snapshot) {
+        return {
+          ...state,
+          rememberSession: prefs.rememberSession,
+          conversation: snapshot.conversation,
+          messages: snapshot.messages,
+          partial: snapshot.partial,
+          source: snapshot.source,
+          status: snapshot.messages.length > 0 ? 'ready' : state.status,
+          groups: snapshot.groups.length > 0 ? snapshot.groups : state.groups,
+          selections: snapshot.selections,
+          customExtras: snapshot.customExtras,
+          hydrated: true,
+        };
+      }
+      // Default path: only long-term modules / requirements come back.
       const titles = new Set(state.groups.map((g) => g.title));
       const restored: FragmentGroup[] = [];
-      action.prefs.modules.forEach((title, i) => {
+      prefs.modules.forEach((title, i) => {
         if (titles.has(title)) return;
         titles.add(title);
         restored.push({
@@ -294,7 +317,7 @@ function reducer(state: DistillerState, action: Action): DistillerState {
           persist: true,
         });
       });
-      const customExtras: PresetOption[] = action.prefs.extras.map((e) => ({
+      const customExtras: PresetOption[] = prefs.extras.map((e) => ({
         id: e.id,
         name: e.name,
         text: e.text,
@@ -305,11 +328,15 @@ function reducer(state: DistillerState, action: Action): DistillerState {
       }));
       return {
         ...state,
+        rememberSession: prefs.rememberSession,
         groups: [...state.groups, ...restored],
         customExtras,
         hydrated: true,
       };
     }
+
+    case 'set-remember':
+      return { ...state, rememberSession: action.value };
 
     case 'clear-material':
       // Clear MATERIAL only — keep the module structure and custom requirements.
@@ -327,12 +354,17 @@ function reducer(state: DistillerState, action: Action): DistillerState {
 export function useDistiller() {
   const [state, dispatch] = useReducer(reducer, undefined, initialState);
 
-  // Load the user's long-term modules / requirements once, on mount.
+  // Load long-term config once, on mount. If "记住本次整理" is on and a snapshot
+  // exists, restore the whole working set; otherwise make sure nothing conversation
+  // -related is left on disk.
   useEffect(() => {
     let alive = true;
-    void loadPrefs().then((prefs) => {
-      if (alive) dispatch({ type: 'hydrate-prefs', prefs });
-    });
+    void (async () => {
+      const prefs = await loadPrefs();
+      if (!prefs.rememberSession) void clearSession();
+      const snapshot = prefs.rememberSession ? await loadSession() : null;
+      if (alive) dispatch({ type: 'hydrate-prefs', prefs, snapshot });
+    })();
     return () => {
       alive = false;
     };
@@ -345,6 +377,7 @@ export function useDistiller() {
   useEffect(() => {
     if (!state.hydrated) return;
     const prefs: Prefs = {
+      rememberSession: state.rememberSession,
       modules: state.groups.filter((g) => g.persist).map((g) => g.title),
       extras: state.customExtras
         .filter((e) => e.scope === 'persist')
@@ -354,7 +387,43 @@ export function useDistiller() {
     if (signature === lastSaved.current) return;
     lastSaved.current = signature;
     void savePrefs(prefs);
-  }, [state.groups, state.customExtras, state.hydrated]);
+  }, [state.groups, state.customExtras, state.hydrated, state.rememberSession]);
+
+  // Opt-in session snapshot: while "记住本次整理" is on, mirror the working set
+  // (conversation + material + selections) to storage so reopening restores it.
+  // A lightweight signature avoids re-serializing message bodies on every edit.
+  const lastSession = useRef('');
+  useEffect(() => {
+    if (!state.hydrated || !state.rememberSession) return;
+    const signature = JSON.stringify({
+      url: state.conversation?.url,
+      n: state.messages.length,
+      g: state.groups,
+      s: state.selections,
+      c: state.customExtras,
+    });
+    if (signature === lastSession.current) return;
+    lastSession.current = signature;
+    void saveSession({
+      conversation: state.conversation,
+      messages: state.messages,
+      partial: state.partial,
+      source: state.source,
+      groups: state.groups,
+      selections: state.selections,
+      customExtras: state.customExtras,
+    });
+  }, [
+    state.hydrated,
+    state.rememberSession,
+    state.conversation,
+    state.messages,
+    state.partial,
+    state.source,
+    state.groups,
+    state.selections,
+    state.customExtras,
+  ]);
 
   /** Outcome of a load, returned so the caller can show a transient hint. */
   const loadConversation = useCallback(
@@ -489,6 +558,14 @@ export function useDistiller() {
       removeCustomExtra: (id: string) => dispatch({ type: 'remove-custom-extra', id }),
       clearMaterial: () => dispatch({ type: 'clear-material' }),
       reset: () => dispatch({ type: 'reset' }),
+      /** Toggle opt-in session persistence; turning it off purges the snapshot. */
+      setRemember: (value: boolean) => {
+        dispatch({ type: 'set-remember', value });
+        if (!value) {
+          lastSession.current = '';
+          void clearSession();
+        }
+      },
     }),
     [loadConversation, retryWithReload, addMessageFragment, addSelection],
   );

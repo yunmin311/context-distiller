@@ -15,13 +15,19 @@ export interface StoredExtra {
 }
 
 export interface Prefs {
+  /**
+   * Opt-in: when true, the current conversation + selected material is snapshotted
+   * to storage so reopening restores it. Default false (privacy default: nothing
+   * conversation-related is persisted).
+   */
+  rememberSession: boolean;
   /** Long-term custom module titles, recreated at the start of each session. */
   modules: string[];
   /** Long-term custom requirements. */
   extras: StoredExtra[];
 }
 
-const EMPTY: Prefs = { modules: [], extras: [] };
+const EMPTY: Prefs = { rememberSession: false, modules: [], extras: [] };
 
 // Defensive caps: config could be corrupted (hand-edited storage, an older bug,
 // a pathological accumulation). Bound counts and lengths so a bad blob can never
@@ -37,6 +43,7 @@ export async function loadPrefs(): Promise<Prefs> {
     const rawModules = Array.isArray(p?.modules) ? p!.modules : [];
     const rawExtras = Array.isArray(p?.extras) ? p!.extras : [];
     return {
+      rememberSession: p?.rememberSession === true,
       modules: rawModules
         .filter((m): m is string => typeof m === 'string' && m.length > 0)
         .map((m) => m.slice(0, 80))

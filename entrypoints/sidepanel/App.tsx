@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { compile } from '../../lib/core/compiler';
 import type { ConversationMessage } from '../../lib/core/types';
 import { useDistiller, type SelectionInput } from './useDistiller';
@@ -95,8 +95,14 @@ export function App() {
   }, [actions]);
 
   // Auto-read on open when the active tab is a ChatGPT page, so the panel lands
-  // straight on the messages instead of an extra click.
+  // straight on the messages instead of an extra click. Runs once, AFTER config +
+  // any remembered session has hydrated — a restored session (status !== 'idle')
+  // suppresses the auto-read so it never overwrites what we just brought back.
+  const didAutoRead = useRef(false);
   useEffect(() => {
+    if (!state.hydrated || didAutoRead.current) return;
+    didAutoRead.current = true;
+    if (state.status !== 'idle') return; // a remembered session was restored
     let cancelled = false;
     void activeTabIsSupported().then((ok) => {
       if (ok && !cancelled) void handleLoad(true);
@@ -104,7 +110,7 @@ export function App() {
     return () => {
       cancelled = true;
     };
-  }, [handleLoad]);
+  }, [state.hydrated, state.status, handleLoad]);
 
   const result = useMemo(
     () => compile(state.groups, state.selections, { customExtras: state.customExtras }),
@@ -290,9 +296,22 @@ export function App() {
       </main>
 
       <footer className="app-footer">
-        <span className="muted tiny">
-          {result.fragmentCount} 段 · {result.charCount} 字
-        </span>
+        <div className="footer-meta">
+          <label
+            className="remember-toggle"
+            title="打开后：本次对话与整理会存到本地，下次打开自动恢复；关闭即清除（默认关闭，不落盘）"
+          >
+            <input
+              type="checkbox"
+              checked={state.rememberSession}
+              onChange={(e) => actions.setRemember(e.target.checked)}
+            />
+            记住本次
+          </label>
+          <span className="muted tiny">
+            {result.fragmentCount} 段 · {result.charCount} 字
+          </span>
+        </div>
         <div className="footer-actions">
           <button
             className="btn btn-primary btn-sm"
