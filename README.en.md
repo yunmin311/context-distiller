@@ -22,7 +22,7 @@ Before you hand material to the AI, it hands the **choice of what, the way it's 
 
 <div align="center">
 
-<img src="docs/screenshots/messages.png" width="600" alt="Context Distiller docked next to a real ChatGPT conversation, reading it and selecting material" />
+<img src="docs/screenshots/messages.png" width="800" alt="Context Distiller docked next to a real ChatGPT conversation, reading it and selecting material" />
 
 <sub>Real screenshot · docked beside a ChatGPT conversation, reading the current thread · select by highlight / whole message (the side panel strips Markdown markers for clean reading)</sub>
 
