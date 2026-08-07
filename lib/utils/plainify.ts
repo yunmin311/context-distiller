@@ -7,6 +7,7 @@
  * cleanly. This is purely cosmetic: the fragments the user selects and the text
  * the compiler emits keep their original Markdown — the AI benefits from it.
  */
+
 /**
  * Above this size we skip the inline passes below. They use lazy backreferences
  * (`(.+?)\1`) whose worst case is quadratic, so a pathological megabyte-long
@@ -18,8 +19,36 @@
  */
 const INLINE_STRIP_LIMIT = 20_000;
 
+/**
+ * plainify() is called inline while rendering every visible message and every
+ * grouped fragment, on every re-render (typing a note re-renders the board).
+ * Since it's a pure function of its input, we memoize by input string so those
+ * re-renders are O(1) lookups instead of re-parsing. Bounded so the cache can't
+ * grow without limit; very large inputs are not cached (they're rare and would
+ * dominate memory).
+ */
+const cache = new Map<string, string>();
+const CACHE_LIMIT = 400;
+const CACHEABLE_MAX = 10_000;
+
 export function plainify(md: string): string {
   if (!md) return md;
+  const cached = cache.get(md);
+  if (cached !== undefined) return cached;
+
+  const out = strip(md);
+
+  if (md.length <= CACHEABLE_MAX) {
+    if (cache.size >= CACHE_LIMIT) {
+      const oldest = cache.keys().next().value;
+      if (oldest !== undefined) cache.delete(oldest);
+    }
+    cache.set(md, out);
+  }
+  return out;
+}
+
+function strip(md: string): string {
   let out = md;
 
   if (md.length <= INLINE_STRIP_LIMIT) {
@@ -35,7 +64,7 @@ export function plainify(md: string): string {
     out = out.replace(/`([^`]+)`/g, '$1');
   }
 
-  out = out
+  return out
     .split('\n')
     .filter((line) => !/^\s*```/.test(line)) // drop code-fence lines
     .map((line) =>
@@ -48,6 +77,4 @@ export function plainify(md: string): string {
     // collapse 3+ blank lines the stripping may leave behind
     .replace(/\n{3,}/g, '\n\n')
     .trim();
-
-  return out;
 }

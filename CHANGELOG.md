@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] — 2026-08-07
+
 ### Added
 - Opt-in **"记住本次整理"** toggle in the footer (off by default): snapshots the
   current conversation + selected material + preset choices to local storage so
@@ -18,6 +20,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Reworded the **对话续接 (handoff)** preset to explicitly cover migrating the
   distilled context into a new conversation or a different model, and note in
   the README that opening the side panel auto-reads the current conversation.
+
+### Performance
+- Memoize `plainify` with a bounded cache, so re-rendering the message list /
+  group board no longer re-parses every message and fragment on each keystroke.
+- Debounce the opt-in session snapshot write, so typing / reordering no longer
+  serializes the whole snapshot to storage synchronously on every change — fixes
+  the lag and slow startup reported when the toggle is on.
 
 ## [0.1.0] — 2026-08-07
 
@@ -55,5 +64,6 @@ to the user. Local-only — no model API, no server, no tracking, never auto-sen
   guard on the display de-Markdown pass, a wrong-tab reload guard, and
   bounds / validation on stored config.
 
-[Unreleased]: https://github.com/yunmin311/context-distiller/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/yunmin311/context-distiller/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/yunmin311/context-distiller/releases/tag/v0.2.0
 [0.1.0]: https://github.com/yunmin311/context-distiller/releases/tag/v0.1.0

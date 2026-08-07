@@ -391,28 +391,32 @@ export function useDistiller() {
 
   // Opt-in session snapshot: while "记住本次整理" is on, mirror the working set
   // (conversation + material + selections) to storage so reopening restores it.
-  // A lightweight signature avoids re-serializing message bodies on every edit.
+  // DEBOUNCED: rapid edits (typing a note, reordering) only reset the timer, so we
+  // serialize the whole snapshot + write to storage at most once per settle window
+  // — never synchronously on every keystroke. A signature skips no-op writes.
   const lastSession = useRef('');
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     if (!state.hydrated || !state.rememberSession) return;
-    const signature = JSON.stringify({
-      url: state.conversation?.url,
-      n: state.messages.length,
-      g: state.groups,
-      s: state.selections,
-      c: state.customExtras,
-    });
-    if (signature === lastSession.current) return;
-    lastSession.current = signature;
-    void saveSession({
-      conversation: state.conversation,
-      messages: state.messages,
-      partial: state.partial,
-      source: state.source,
-      groups: state.groups,
-      selections: state.selections,
-      customExtras: state.customExtras,
-    });
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(() => {
+      const snapshot = {
+        conversation: state.conversation,
+        messages: state.messages,
+        partial: state.partial,
+        source: state.source,
+        groups: state.groups,
+        selections: state.selections,
+        customExtras: state.customExtras,
+      };
+      const signature = JSON.stringify(snapshot);
+      if (signature === lastSession.current) return;
+      lastSession.current = signature;
+      void saveSession(snapshot);
+    }, 500);
+    return () => {
+      if (saveTimer.current) clearTimeout(saveTimer.current);
+    };
   }, [
     state.hydrated,
     state.rememberSession,
