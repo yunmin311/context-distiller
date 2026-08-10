@@ -8,12 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- **Follow ChatGPT** — as you scroll the conversation or use ChatGPT's right-side
-  jump, the panel highlights and scrolls to the message you're on (for messages it
-  has read). Content script tracks the top-of-viewport message and pushes it to
-  the panel; the panel highlights the matching row and brings it into view.
 - **Edit a fragment's text** — click a fragment in the workspace to edit it inline
   (blur to save, Esc to cancel), handy for trimming a quote before compiling.
+
+### Changed
+- **Reading now loads the COMPLETE conversation from ChatGPT's own backend** (a
+  same-origin GET using your existing session), so long virtualized threads read
+  in full and instantly. The previous DOM read only saw the messages ChatGPT keeps
+  mounted (~a screenful), which is why long threads came back mostly empty; that
+  DOM read stays as a fallback (new chats / when the API isn't available). Nothing
+  is uploaded anywhere — see docs/PRIVACY.md.
 
 ### Fixed
 - The note-at-selection bar could be clipped by the panel edges (especially in a

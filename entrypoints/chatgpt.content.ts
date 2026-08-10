@@ -50,70 +50,71 @@ export default defineContentScript({
   },
 });
 
-const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+/**
+ * Read the WHOLE conversation straight from ChatGPT's own backend. ChatGPT keeps
+ * the full thread client-side and serves it from its own API, so one request
+ * gets EVERY turn regardless of length — beating the DOM, which is virtualized
+ * down to a screenful (that's why long threads only read ~15%). Same-origin,
+ * uses the user's own session, uploads nothing anywhere. Returns null when it
+ * can't be used (new chat / not signed in / endpoint changed) so the DOM path
+ * takes over.
+ */
+async function readViaApi(): Promise<RawMessage[] | null> {
+  try {
+    const convId = location.pathname.match(/\/c\/([\w-]+)/)?.[1];
+    if (!convId) return null;
 
-/** The scrollable element that holds the conversation (ChatGPT virtualizes it). */
-function findScrollContainer(): HTMLElement | null {
-  const msg = document.querySelector<HTMLElement>('[data-message-author-role]');
-  let el: HTMLElement | null = msg?.parentElement ?? null;
-  while (el && el !== document.body) {
-    const oy = getComputedStyle(el).overflowY;
-    if ((oy === 'auto' || oy === 'scroll') && el.scrollHeight > el.clientHeight + 40) return el;
-    el = el.parentElement;
+    const session = await fetch('/api/auth/session', { credentials: 'include' })
+      .then((r) => (r.ok ? r.json() : null))
+      .catch(() => null);
+    const token: string | undefined = session?.accessToken;
+    if (!token) return null;
+
+    const conv = await fetch(`/backend-api/conversation/${convId}`, {
+      headers: { Authorization: `Bearer ${token}` },
+      credentials: 'include',
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .catch(() => null);
+    const mapping = conv?.mapping;
+    if (!mapping || typeof mapping !== 'object') return null;
+
+    const rows: Array<{ id: string; role: string; text: string; t: number }> = [];
+    for (const node of Object.values(mapping) as Array<Record<string, any>>) {
+      const msg = node?.message;
+      if (!msg?.author) continue;
+      const role: string = msg.author.role;
+      if (role !== 'user' && role !== 'assistant') continue; // drop tool / system
+      if (msg.recipient && msg.recipient !== 'all') continue; // drop tool-directed
+      if (msg.metadata?.is_visually_hidden_from_conversation) continue; // drop hidden
+      const text = contentToText(msg.content);
+      if (!text) continue;
+      rows.push({ id: msg.id ?? node.id, role, text, t: msg.create_time ?? 0 });
+    }
+    if (rows.length === 0) return null;
+    rows.sort((a, b) => a.t - b.t); // chronological = conversation order
+    return rows.map((r) => ({ id: r.id, role: r.role, text: r.text, source: 'page-data' as const }));
+  } catch {
+    return null;
   }
-  return null;
 }
 
-/**
- * Read the WHOLE conversation. ChatGPT virtualizes long threads (only messages
- * near the viewport are actually in the DOM), so a single read can miss most of
- * it. We scroll the conversation container top-to-bottom, collecting every
- * message that mounts along the way (deduped by id; first-seen order = message
- * order), then restore the scroll position. Falls back to a single read when
- * there's no scroll container.
- */
-async function readAllMessages(): Promise<{ raw: RawMessage[]; container: boolean; nodeMax: number }> {
-  const seen = new Map<string, RawMessage>();
-  let nodeMax = 0;
-  const collect = () => {
-    nodeMax = Math.max(nodeMax, document.querySelectorAll('[data-message-author-role]').length);
-    for (const m of chatgptAdapter.extractFromDom()) {
-      if (!m.id || !m.text) continue;
-      const prev = seen.get(m.id);
-      if (!prev) seen.set(m.id, m);
-      else if (m.text.length > prev.text.length) prev.text = m.text;
-    }
-  };
-
-  const container = findScrollContainer();
-  if (!container) {
-    collect();
-    return { raw: [...seen.values()], container: false, nodeMax };
+/** Pull readable text out of a ChatGPT message `content` object. */
+function contentToText(content: any): string {
+  if (!content) return '';
+  const t = content.content_type;
+  if (t === 'text' || !t) {
+    return (content.parts || []).filter((p: unknown) => typeof p === 'string').join('\n').trim();
   }
-
-  const restore = container.scrollTop;
-  try {
-    container.scrollTop = 0;
-    await delay(180);
-    collect();
-    let guard = 0;
-    while (container.scrollTop + container.clientHeight < container.scrollHeight - 4 && guard < 80) {
-      guard += 1;
-      container.scrollTop += Math.max(200, container.clientHeight * 0.8);
-      await delay(140);
-      collect();
-    }
-    collect();
-  } catch {
-    // keep whatever we collected
-  } finally {
-    try {
-      container.scrollTop = restore;
-    } catch {
-      /* ignore */
-    }
+  if (t === 'multimodal_text') {
+    return (content.parts || [])
+      .map((p: any) => (typeof p === 'string' ? p : p?.text || ''))
+      .filter(Boolean)
+      .join('\n')
+      .trim();
   }
-  return { raw: [...seen.values()], container: true, nodeMax };
+  if (t === 'code') return typeof content.text === 'string' ? content.text : '';
+  return '';
 }
 
 /** Inject the main-world bridge; swallow failures so DOM extraction still works. */
@@ -181,49 +182,42 @@ async function getConversation(): Promise<PanelResponse> {
 
   let raw: RawMessage[];
   let source: MessageSource;
+  let partial: boolean;
 
-  // Scroll the whole thread and collect every message (beats ChatGPT's
-  // virtualization, which only keeps ~a screenful in the DOM). Then enrich the
-  // currently-mounted ones with richer main-world text (better code blocks).
-  const { raw: domRaw, container, nodeMax } = await readAllMessages();
-
-  if (domRaw.length > 0) {
-    const mw = await requestMainWorld(400);
-    const mwText = new Map<string, string>();
-    if (mw?.ok && mw.messages) {
-      for (const m of mw.messages) {
-        if (m.id && m.text) mwText.set(m.id, m.text);
-      }
-    }
-    raw = domRaw.map((d) =>
-      d.id && mwText.has(d.id)
-        ? { ...d, text: mwText.get(d.id)!, source: 'page-data' as const }
-        : d,
-    );
-    source = mwText.size > 0 ? 'page-data' : 'dom';
+  // Primary: pull the COMPLETE thread from ChatGPT's backend (any length).
+  const apiRaw = await readViaApi();
+  if (apiRaw && apiRaw.length > 0) {
+    raw = apiRaw;
+    source = 'page-data';
+    partial = false; // the whole conversation, not just what's mounted
   } else {
-    // No DOM messages at all — the markup may have changed; try main-world alone.
-    const mw = await requestMainWorld(400);
-    if (mw?.ok && mw.messages && mw.messages.length > 0) {
-      raw = mw.messages.map((m) => ({
-        id: m.id,
-        role: m.role,
-        text: m.text,
-        source: 'page-data' as const,
-      }));
-      source = 'page-data';
+    // Fallback: read the mounted DOM (main-world text where available). May be
+    // partial when ChatGPT virtualizes a long thread.
+    const domRaw = chatgptAdapter.extractFromDom();
+    if (domRaw.length > 0) {
+      const mw = await requestMainWorld(400);
+      const mwText = new Map<string, string>();
+      if (mw?.ok && mw.messages) {
+        for (const m of mw.messages) if (m.id && m.text) mwText.set(m.id, m.text);
+      }
+      raw = domRaw.map((d) =>
+        d.id && mwText.has(d.id)
+          ? { ...d, text: mwText.get(d.id)!, source: 'page-data' as const }
+          : d,
+      );
+      source = mwText.size > 0 ? 'page-data' : 'dom';
     } else {
-      raw = [];
-      source = 'dom';
+      const mw = await requestMainWorld(400);
+      raw =
+        mw?.ok && mw.messages
+          ? mw.messages.map((m) => ({ id: m.id, role: m.role, text: m.text, source: 'page-data' as const }))
+          : [];
+      source = 'page-data';
     }
+    partial = true;
   }
 
-  // Diagnostic (visible in the ChatGPT page console): how much did we see?
-  console.debug('[Context Distiller] read', {
-    collected: domRaw.length,
-    scrollContainer: container,
-    maxNodesSeen: nodeMax,
-  });
+  console.debug('[Context Distiller] read', { count: raw.length, via: partial ? 'dom' : 'api' });
 
   const messages = normalizeMessages(raw);
   if (messages.length === 0) {
@@ -235,15 +229,7 @@ async function getConversation(): Promise<PanelResponse> {
   }
 
   const conversation: ConversationInfo = { title, url, platform: chatgptAdapter.id };
-  return {
-    kind: 'conversation',
-    ok: true,
-    conversation,
-    messages,
-    // Virtual lists only mount visible messages, so completeness is not guaranteed.
-    partial: true,
-    source,
-  };
+  return { kind: 'conversation', ok: true, conversation, messages, partial, source };
 }
 
 function readSelection(): SelectionPayload | null {
