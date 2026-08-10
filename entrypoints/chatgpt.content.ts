@@ -10,7 +10,6 @@ import {
   type SelectionPayload,
   type MwRequest,
   type MwResponse,
-  type ActiveMessagePush,
 } from '../lib/messaging/protocol';
 
 /**
@@ -48,68 +47,73 @@ export default defineContentScript({
       // dev reload. Nothing to do — the next fresh load registers cleanly.
       console.debug('[Context Distiller] listener not registered (context invalidated):', err);
     }
-
-    setupFollow(ctx);
   },
 });
 
-/**
- * Track which message sits at the top of the ChatGPT viewport and push its id to
- * the side panel, so the panel can follow the user's scrolling / right-side jump.
- * Throttled to animation frames and to actual id changes; if the panel isn't open
- * the send simply has no receiver.
- */
-function setupFollow(ctx: { isInvalid: boolean }): void {
-  let scheduled = false;
-  let lastId = '';
-  const onScroll = () => {
-    if (scheduled) return;
-    scheduled = true;
-    requestAnimationFrame(() => {
-      scheduled = false;
-      if (ctx.isInvalid) return;
-      const id = topVisibleMessageId();
-      if (!id || id === lastId) return;
-      lastId = id;
-      const msg: ActiveMessagePush = { kind: 'active-message', messageId: id };
-      try {
-        void browser.runtime.sendMessage(msg).catch(() => {});
-      } catch {
-        // no receiver / context gone — ignore
-      }
-    });
-  };
-  // Capture phase catches scrolling of ChatGPT's inner message container too.
-  window.addEventListener('scroll', onScroll, true);
+const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/** The scrollable element that holds the conversation (ChatGPT virtualizes it). */
+function findScrollContainer(): HTMLElement | null {
+  const msg = document.querySelector<HTMLElement>('[data-message-author-role]');
+  let el: HTMLElement | null = msg?.parentElement ?? null;
+  while (el && el !== document.body) {
+    const oy = getComputedStyle(el).overflowY;
+    if ((oy === 'auto' || oy === 'scroll') && el.scrollHeight > el.clientHeight + 40) return el;
+    el = el.parentElement;
+  }
+  return null;
 }
 
 /**
- * The message whose top sits just below the header line — i.e. the one the user
- * has scrolled to / is reading at the top of the viewport.
+ * Read the WHOLE conversation. ChatGPT virtualizes long threads (only messages
+ * near the viewport are actually in the DOM), so a single read can miss most of
+ * it. We scroll the conversation container top-to-bottom, collecting every
+ * message that mounts along the way (deduped by id; first-seen order = message
+ * order), then restore the scroll position. Falls back to a single read when
+ * there's no scroll container.
  */
-function topVisibleMessageId(): string | null {
-  const nodes = Array.from(document.querySelectorAll<HTMLElement>('[data-message-author-role]'));
-  const LINE = 140; // a little below the very top of the viewport
-  let best: HTMLElement | null = null;
-  let bestTop = -Infinity;
-  for (const n of nodes) {
-    const rect = n.getBoundingClientRect();
-    if (rect.bottom <= 0) continue; // fully scrolled above
-    if (rect.top <= LINE && rect.top > bestTop) {
-      bestTop = rect.top;
-      best = n;
+async function readAllMessages(): Promise<{ raw: RawMessage[]; container: boolean; nodeMax: number }> {
+  const seen = new Map<string, RawMessage>();
+  let nodeMax = 0;
+  const collect = () => {
+    nodeMax = Math.max(nodeMax, document.querySelectorAll('[data-message-author-role]').length);
+    for (const m of chatgptAdapter.extractFromDom()) {
+      if (!m.id || !m.text) continue;
+      const prev = seen.get(m.id);
+      if (!prev) seen.set(m.id, m);
+      else if (m.text.length > prev.text.length) prev.text = m.text;
+    }
+  };
+
+  const container = findScrollContainer();
+  if (!container) {
+    collect();
+    return { raw: [...seen.values()], container: false, nodeMax };
+  }
+
+  const restore = container.scrollTop;
+  try {
+    container.scrollTop = 0;
+    await delay(180);
+    collect();
+    let guard = 0;
+    while (container.scrollTop + container.clientHeight < container.scrollHeight - 4 && guard < 80) {
+      guard += 1;
+      container.scrollTop += Math.max(200, container.clientHeight * 0.8);
+      await delay(140);
+      collect();
+    }
+    collect();
+  } catch {
+    // keep whatever we collected
+  } finally {
+    try {
+      container.scrollTop = restore;
+    } catch {
+      /* ignore */
     }
   }
-  if (!best) {
-    // Nothing crosses the line — take the first message still on screen.
-    for (const n of nodes) {
-      if (n.getBoundingClientRect().bottom > 0) {
-        best = n;
-        break;
-      }
-    }
-  }
-  return best ? best.getAttribute('data-message-id') : null;
+  return { raw: [...seen.values()], container: true, nodeMax };
 }
 
 /** Inject the main-world bridge; swallow failures so DOM extraction still works. */
@@ -178,17 +182,13 @@ async function getConversation(): Promise<PanelResponse> {
   let raw: RawMessage[];
   let source: MessageSource;
 
-  // Read BOTH the page's internal React data (better text — code blocks etc.) and
-  // the DOM, then MERGE. The DOM is the source of truth for which messages exist
-  // and their order (it's just `[data-message-author-role]` nodes and works even
-  // when ChatGPT reshapes its internal message objects); main-world text, when
-  // available for a given id, is layered on top because it's richer. This way a
-  // main-world change that drops (say) assistant turns can't hide them — the DOM
-  // still carries them. Falls back to whichever side has anything.
-  const mw = await requestMainWorld(400);
-  const domRaw = chatgptAdapter.extractFromDom();
+  // Scroll the whole thread and collect every message (beats ChatGPT's
+  // virtualization, which only keeps ~a screenful in the DOM). Then enrich the
+  // currently-mounted ones with richer main-world text (better code blocks).
+  const { raw: domRaw, container, nodeMax } = await readAllMessages();
 
   if (domRaw.length > 0) {
+    const mw = await requestMainWorld(400);
     const mwText = new Map<string, string>();
     if (mw?.ok && mw.messages) {
       for (const m of mw.messages) {
@@ -201,18 +201,29 @@ async function getConversation(): Promise<PanelResponse> {
         : d,
     );
     source = mwText.size > 0 ? 'page-data' : 'dom';
-  } else if (mw?.ok && mw.messages && mw.messages.length > 0) {
-    raw = mw.messages.map((m) => ({
-      id: m.id,
-      role: m.role,
-      text: m.text,
-      source: 'page-data' as const,
-    }));
-    source = 'page-data';
   } else {
-    raw = [];
-    source = 'dom';
+    // No DOM messages at all — the markup may have changed; try main-world alone.
+    const mw = await requestMainWorld(400);
+    if (mw?.ok && mw.messages && mw.messages.length > 0) {
+      raw = mw.messages.map((m) => ({
+        id: m.id,
+        role: m.role,
+        text: m.text,
+        source: 'page-data' as const,
+      }));
+      source = 'page-data';
+    } else {
+      raw = [];
+      source = 'dom';
+    }
   }
+
+  // Diagnostic (visible in the ChatGPT page console): how much did we see?
+  console.debug('[Context Distiller] read', {
+    collected: domRaw.length,
+    scrollContainer: container,
+    maxNodesSeen: nodeMax,
+  });
 
   const messages = normalizeMessages(raw);
   if (messages.length === 0) {
