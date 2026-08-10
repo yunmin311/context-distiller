@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import type { ConversationMessage, FragmentGroup } from '../../../lib/core/types';
 import type { SelectionInput } from '../useDistiller';
 import { plainify } from '../../../lib/utils/plainify';
@@ -6,6 +6,8 @@ import { plainify } from '../../../lib/utils/plainify';
 interface MessageListProps {
   messages: ConversationMessage[];
   addedIds: Set<string>;
+  /** Ids of user turns whose next turn is an assistant reply (drives ＋问答). */
+  pairableIds: Set<string>;
   groups: FragmentGroup[];
   activeGroupId: string;
   onSetActive: (groupId: string) => void;
@@ -13,7 +15,6 @@ interface MessageListProps {
   onAdd: (message: ConversationMessage) => void;
   onAddPair: (message: ConversationMessage) => void;
   onAddSelection: (payload: SelectionInput) => void;
-  canPair: (message: ConversationMessage) => boolean;
 }
 
 const NEW_MODULE = '__new__';
@@ -33,9 +34,81 @@ function roleLabel(role: ConversationMessage['role']): string {
   return '系统';
 }
 
+interface MessageRowProps {
+  message: ConversationMessage;
+  readable: string;
+  open: boolean;
+  added: boolean;
+  canPair: boolean;
+  onToggle: (id: string) => void;
+  onAdd: (message: ConversationMessage) => void;
+  onAddPair: (message: ConversationMessage) => void;
+}
+
+/**
+ * One message row. Memoized: App re-renders on every note keystroke / preset
+ * click, but a row only re-renders when its own props change (its text, its
+ * added / expanded / pairable state). With stable callbacks from App, editing a
+ * note no longer re-renders the whole conversation.
+ */
+const MessageRow = memo(function MessageRow({
+  message,
+  readable,
+  open,
+  added,
+  canPair,
+  onToggle,
+  onAdd,
+  onAddPair,
+}: MessageRowProps) {
+  const isLong = readable.length > CLAMP_CHARS;
+  const shown = isLong && !open ? readable.slice(0, CLAMP_CHARS).trimEnd() + '…' : readable;
+  return (
+    <article
+      className={`msg msg-${message.role}`}
+      data-mid={message.id}
+      data-role={message.role}
+      data-order={message.order}
+    >
+      <header className="msg-head">
+        <span className={`tag tag-${message.role}`}>{roleLabel(message.role)}</span>
+        <span className="muted tiny">#{message.order + 1}</span>
+        {isLong && (
+          <button className="link-btn tiny" onClick={() => onToggle(message.id)}>
+            {open ? '收起' : '展开'}
+          </button>
+        )}
+        <div className="spacer" />
+        {canPair && !added && (
+          <button
+            className="chip-btn tiny"
+            title="加入这条提问和它的下一条回答"
+            onClick={() => onAddPair(message)}
+          >
+            ＋问答
+          </button>
+        )}
+        {added ? (
+          <span className="added-flag tiny" title="整条已加入">
+            ✓ 已加入
+          </span>
+        ) : (
+          <button className="chip-btn chip-btn-strong tiny" onClick={() => onAdd(message)}>
+            ＋加入
+          </button>
+        )}
+      </header>
+      <div className={`msg-body ${open ? 'msg-body-open' : ''}`} data-body>
+        {shown}
+      </div>
+    </article>
+  );
+});
+
 export function MessageList({
   messages,
   addedIds,
+  pairableIds,
   groups,
   activeGroupId,
   onSetActive,
@@ -43,11 +116,11 @@ export function MessageList({
   onAdd,
   onAddPair,
   onAddSelection,
-  canPair,
 }: MessageListProps) {
   const [filter, setFilter] = useState('');
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [popover, setPopover] = useState<Popover | null>(null);
+  const [selNote, setSelNote] = useState('');
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState('');
 
@@ -84,18 +157,19 @@ export function MessageList({
     };
   }, [popover]);
 
-  function toggle(id: string) {
+  // Stable so the memoized rows don't re-render when it's recreated.
+  const toggle = useCallback((id: string) => {
     setExpanded((prev) => {
       const next = new Set(prev);
       next.has(id) ? next.delete(id) : next.add(id);
       return next;
     });
-  }
+  }, []);
 
   // Highlight-to-add: when the user selects text inside a message body, show a
-  // small chip at the selection to add exactly that fragment.
+  // small chip at the selection to add exactly that fragment (with an optional note).
   function handleMouseUp(event: React.MouseEvent) {
-    // Ignore the chip's own mouseup so clicking it doesn't re-open/duplicate.
+    // Ignore interaction inside the chip so clicking / typing doesn't re-open it.
     if ((event.target as HTMLElement).closest('.sel-pop')) return;
 
     const selection = window.getSelection();
@@ -120,7 +194,8 @@ export function MessageList({
     const rect = rects[rects.length - 1] ?? range.getBoundingClientRect();
     const below = rect.top < TOP_SAFE;
     // Keep the chip inside the panel so it never squishes against an edge.
-    const x = Math.min(Math.max(rect.left + rect.width / 2, 60), window.innerWidth - 60);
+    const x = Math.min(Math.max(rect.left + rect.width / 2, 90), window.innerWidth - 90);
+    setSelNote('');
     setPopover({
       text,
       role: msgEl.dataset.role === 'user' ? 'user' : 'assistant',
@@ -139,8 +214,10 @@ export function MessageList({
       role: popover.role,
       messageId: popover.messageId,
       sourceOrder: popover.sourceOrder,
+      note: selNote.trim() || undefined,
     });
     window.getSelection()?.removeAllRanges();
+    setSelNote('');
     setPopover(null);
   }
 
@@ -227,72 +304,47 @@ export function MessageList({
       )}
 
       <p className="hint tiny">
-        整条点「＋加入」；只要其中几句 —— 直接在消息里划词，点冒出来的「加入选中」。
+        整条点「＋加入」；只要其中几句 —— 直接在消息里划词，冒出来的小条里可顺手加条注释再加入。
       </p>
 
-      {filtered.map((message) => {
-        // Show a readable, de-Markdown'd version; the stored text stays original.
-        const readable = readables.get(message.id) ?? message.text;
-        const isLong = readable.length > CLAMP_CHARS;
-        const open = expanded.has(message.id);
-        const shown = isLong && !open ? readable.slice(0, CLAMP_CHARS).trimEnd() + '…' : readable;
-        const added = addedIds.has(message.id);
-        return (
-          <article
-            key={message.id}
-            className={`msg msg-${message.role}`}
-            data-mid={message.id}
-            data-role={message.role}
-            data-order={message.order}
-          >
-            <header className="msg-head">
-              <span className={`tag tag-${message.role}`}>{roleLabel(message.role)}</span>
-              <span className="muted tiny">#{message.order + 1}</span>
-              {isLong && (
-                <button className="link-btn tiny" onClick={() => toggle(message.id)}>
-                  {open ? '收起' : '展开'}
-                </button>
-              )}
-              <div className="spacer" />
-              {canPair(message) && !added && (
-                <button
-                  className="chip-btn tiny"
-                  title="加入这条提问和它的下一条回答"
-                  onClick={() => onAddPair(message)}
-                >
-                  ＋问答
-                </button>
-              )}
-              {added ? (
-                <span className="added-flag tiny" title="整条已加入">
-                  ✓ 已加入
-                </span>
-              ) : (
-                <button className="chip-btn chip-btn-strong tiny" onClick={() => onAdd(message)}>
-                  ＋加入
-                </button>
-              )}
-            </header>
-            <div className={`msg-body ${open ? 'msg-body-open' : ''}`} data-body>
-              {shown}
-            </div>
-          </article>
-        );
-      })}
+      {filtered.map((message) => (
+        <MessageRow
+          key={message.id}
+          message={message}
+          readable={readables.get(message.id) ?? message.text}
+          open={expanded.has(message.id)}
+          added={addedIds.has(message.id)}
+          canPair={pairableIds.has(message.id)}
+          onToggle={toggle}
+          onAdd={onAdd}
+          onAddPair={onAddPair}
+        />
+      ))}
 
       {messages.length > 0 && filtered.length === 0 && (
         <p className="muted tiny">没有匹配「{filter}」的消息。</p>
       )}
 
       {popover && (
-        <button
+        <div
           className={`sel-pop ${popover.below ? 'sel-pop-below' : ''}`}
           style={{ left: popover.x, top: popover.y }}
-          onMouseDown={(e) => e.preventDefault()} // keep the selection alive for the click
-          onClick={commitSelection}
         >
-          ＋ 加入选中
-        </button>
+          <input
+            className="sel-pop-note"
+            autoFocus
+            placeholder="加条注释（可选）"
+            value={selNote}
+            onChange={(e) => setSelNote(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') commitSelection();
+              if (e.key === 'Escape') setPopover(null);
+            }}
+          />
+          <button className="sel-pop-add" onClick={commitSelection}>
+            ＋ 加入选中
+          </button>
+        </div>
       )}
     </div>
   );

@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] — 2026-08-10
+
+### Added
+- **Note at selection time** — when you highlight text in a message, the add chip
+  now includes a small note field, so you can annotate the fragment as you add it
+  (previously notes could only be added later in the workspace).
+
+### Performance
+- Memoized message rows and grouped-fragment rows (`React.memo`) and stabilized the
+  callbacks passed to them, so typing a note or clicking a preset no longer
+  re-renders the whole conversation — only the row that actually changed. This is
+  the main fix for the sluggishness reported after 0.2.0.
+
 ## [0.2.0] — 2026-08-07
 
 ### Added
@@ -64,6 +77,7 @@ to the user. Local-only — no model API, no server, no tracking, never auto-sen
   guard on the display de-Markdown pass, a wrong-tab reload guard, and
   bounds / validation on stored config.
 
-[Unreleased]: https://github.com/yunmin311/context-distiller/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/yunmin311/context-distiller/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/yunmin311/context-distiller/releases/tag/v0.3.0
 [0.2.0]: https://github.com/yunmin311/context-distiller/releases/tag/v0.2.0
 [0.1.0]: https://github.com/yunmin311/context-distiller/releases/tag/v0.1.0

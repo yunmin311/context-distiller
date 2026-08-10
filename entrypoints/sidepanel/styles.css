@@ -521,18 +521,47 @@ textarea:focus,
   position: fixed;
   z-index: 60;
   transform: translate(-50%, -100%);
+  display: flex;
+  align-items: center;
+  gap: 6px;
   background: var(--sel);
   color: var(--sel-ink);
   border: none;
   border-radius: 8px;
-  padding: 6px 11px;
+  padding: 5px 6px;
+  box-shadow: var(--shadow-pop);
+  animation: pop-in 0.12s ease-out;
+}
+.sel-pop-note {
+  width: 132px;
+  border: none;
+  border-radius: 5px;
+  padding: 4px 7px;
+  font-family: inherit;
+  font-size: 12px;
+  background: rgba(255, 255, 255, 0.14);
+  color: var(--sel-ink);
+  outline: none;
+}
+.sel-pop-note::placeholder {
+  color: var(--sel-ink);
+  opacity: 0.55;
+}
+.sel-pop-add {
+  flex: 0 0 auto;
+  border: none;
+  border-radius: 5px;
+  padding: 4px 9px;
   font-family: inherit;
   font-size: 12px;
   font-weight: 600;
   white-space: nowrap;
   cursor: pointer;
-  box-shadow: var(--shadow-pop);
-  animation: pop-in 0.12s ease-out;
+  background: rgba(255, 255, 255, 0.16);
+  color: var(--sel-ink);
+}
+.sel-pop-add:hover {
+  background: rgba(255, 255, 255, 0.26);
 }
 .sel-pop::after {
   content: '';

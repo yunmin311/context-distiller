@@ -32,6 +32,8 @@ export interface SelectionInput {
   role: 'user' | 'assistant';
   messageId?: string;
   sourceOrder: number;
+  /** Optional note the user typed at selection time; becomes the fragment note. */
+  note?: string;
 }
 
 export interface DistillerState {
@@ -521,6 +523,7 @@ export function useDistiller() {
         text: payload.text,
         sourceOrder: payload.sourceOrder,
         whole: false,
+        note: payload.note,
       },
     });
   }, []);

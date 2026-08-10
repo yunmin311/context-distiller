@@ -134,27 +134,64 @@ export function App() {
   const topTitle =
     state.status === 'ready' && state.conversation ? state.conversation.title : 'Context Distiller';
 
-  function canPair(message: ConversationMessage): boolean {
-    if (message.role !== 'user') return false;
-    const index = state.messages.findIndex((m) => m.id === message.id);
-    const next = state.messages[index + 1];
-    return !!next && next.role === 'assistant';
-  }
-
-  function addPair(message: ConversationMessage) {
-    const index = state.messages.findIndex((m) => m.id === message.id);
-    const next = state.messages[index + 1];
-    if (!addedIds.has(message.id)) actions.addMessageFragment(message, activeGroupId);
-    if (next && next.role === 'assistant' && !addedIds.has(next.id)) {
-      actions.addMessageFragment(next, activeGroupId);
+  // User turns whose next turn is an assistant reply — drives the "＋问答" button.
+  const pairableIds = useMemo(() => {
+    const ids = new Set<string>();
+    const msgs = state.messages;
+    for (let i = 0; i < msgs.length - 1; i += 1) {
+      const cur = msgs[i];
+      const next = msgs[i + 1];
+      if (cur && next && cur.role === 'user' && next.role === 'assistant') ids.add(cur.id);
     }
-    setToast({ text: `已加入问答到「${activeGroup?.title}」`, tone: 'ok' });
-  }
+    return ids;
+  }, [state.messages]);
 
-  function handleAddSelection(payload: SelectionInput) {
-    actions.addSelection(activeGroupId, payload);
-    setToast({ text: `已加入选中到「${activeGroup?.title}」`, tone: 'ok' });
-  }
+  // Handlers passed to the memoized message rows must keep a STABLE identity, so a
+  // note keystroke (which rebuilds `groups` / `addedIds`) doesn't re-render the
+  // whole message list. We read the latest values through a ref instead of closing
+  // over them, so the callbacks themselves never need to change.
+  const latestRef = useRef({
+    activeGroupId,
+    activeGroupTitle: activeGroup?.title,
+    addedIds,
+    messages: state.messages,
+  });
+  latestRef.current = {
+    activeGroupId,
+    activeGroupTitle: activeGroup?.title,
+    addedIds,
+    messages: state.messages,
+  };
+
+  const handleAddMessage = useCallback(
+    (message: ConversationMessage) => {
+      actions.addMessageFragment(message, latestRef.current.activeGroupId);
+      setToast({ text: `已加入到「${latestRef.current.activeGroupTitle}」`, tone: 'ok' });
+    },
+    [actions],
+  );
+
+  const addPair = useCallback(
+    (message: ConversationMessage) => {
+      const { activeGroupId: gid, activeGroupTitle, addedIds: added, messages } = latestRef.current;
+      const index = messages.findIndex((m) => m.id === message.id);
+      const next = messages[index + 1];
+      if (!added.has(message.id)) actions.addMessageFragment(message, gid);
+      if (next && next.role === 'assistant' && !added.has(next.id)) {
+        actions.addMessageFragment(next, gid);
+      }
+      setToast({ text: `已加入问答到「${activeGroupTitle}」`, tone: 'ok' });
+    },
+    [actions],
+  );
+
+  const handleAddSelection = useCallback(
+    (payload: SelectionInput) => {
+      actions.addSelection(latestRef.current.activeGroupId, payload);
+      setToast({ text: `已加入选中到「${latestRef.current.activeGroupTitle}」`, tone: 'ok' });
+    },
+    [actions],
+  );
 
   async function handleCopy(text: string) {
     if (!text.trim()) {
@@ -249,17 +286,14 @@ export function App() {
               <MessageList
                 messages={state.messages}
                 addedIds={addedIds}
+                pairableIds={pairableIds}
                 groups={state.groups}
                 activeGroupId={activeGroupId}
                 onSetActive={setActiveGroupId}
                 onAddGroup={actions.addGroup}
-                onAdd={(m) => {
-                  actions.addMessageFragment(m, activeGroupId);
-                  setToast({ text: `已加入到「${activeGroup?.title}」`, tone: 'ok' });
-                }}
+                onAdd={handleAddMessage}
                 onAddPair={addPair}
                 onAddSelection={handleAddSelection}
-                canPair={canPair}
               />
             </section>
 
