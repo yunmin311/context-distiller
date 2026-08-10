@@ -44,7 +44,18 @@ export default defineUnlistedScript(() => {
   function partsToText(content: any): string {
     const parts = content?.parts;
     if (Array.isArray(parts)) {
-      return parts.filter((p: unknown) => typeof p === 'string').join('\n').trim();
+      // A part is usually a string, but newer ChatGPT builds can wrap it in an
+      // object ({ text }, { content }, …). Pull the text out of whichever shape.
+      return parts
+        .map((p: any) => {
+          if (typeof p === 'string') return p;
+          if (p && typeof p.text === 'string') return p.text;
+          if (p && typeof p.content === 'string') return p.content;
+          return '';
+        })
+        .filter(Boolean)
+        .join('\n')
+        .trim();
     }
     if (typeof content?.text === 'string') return content.text.trim();
     return '';

@@ -178,12 +178,30 @@ async function getConversation(): Promise<PanelResponse> {
   let raw: RawMessage[];
   let source: MessageSource;
 
-  // Prefer the page's internal data (better text), fall back to DOM. The bridge
-  // is injected at document_idle and normally answers in a few ms; the short
-  // window only bites on the very first read before it has registered, and DOM
-  // extraction (still good) covers that case.
+  // Read BOTH the page's internal React data (better text — code blocks etc.) and
+  // the DOM, then MERGE. The DOM is the source of truth for which messages exist
+  // and their order (it's just `[data-message-author-role]` nodes and works even
+  // when ChatGPT reshapes its internal message objects); main-world text, when
+  // available for a given id, is layered on top because it's richer. This way a
+  // main-world change that drops (say) assistant turns can't hide them — the DOM
+  // still carries them. Falls back to whichever side has anything.
   const mw = await requestMainWorld(400);
-  if (mw?.ok && mw.messages && mw.messages.length > 0) {
+  const domRaw = chatgptAdapter.extractFromDom();
+
+  if (domRaw.length > 0) {
+    const mwText = new Map<string, string>();
+    if (mw?.ok && mw.messages) {
+      for (const m of mw.messages) {
+        if (m.id && m.text) mwText.set(m.id, m.text);
+      }
+    }
+    raw = domRaw.map((d) =>
+      d.id && mwText.has(d.id)
+        ? { ...d, text: mwText.get(d.id)!, source: 'page-data' as const }
+        : d,
+    );
+    source = mwText.size > 0 ? 'page-data' : 'dom';
+  } else if (mw?.ok && mw.messages && mw.messages.length > 0) {
     raw = mw.messages.map((m) => ({
       id: m.id,
       role: m.role,
@@ -192,7 +210,7 @@ async function getConversation(): Promise<PanelResponse> {
     }));
     source = 'page-data';
   } else {
-    raw = chatgptAdapter.extractFromDom();
+    raw = [];
     source = 'dom';
   }
 
