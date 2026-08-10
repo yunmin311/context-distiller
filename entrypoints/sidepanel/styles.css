@@ -444,6 +444,12 @@ textarea:focus,
   background: var(--surface);
   border: 1px solid var(--line);
 }
+/* "You are here" — the message the ChatGPT page is currently scrolled to. */
+.msg-active {
+  background: var(--accent-weak);
+  box-shadow: inset 3px 0 0 var(--accent);
+  transition: box-shadow 0.15s ease, background 0.15s ease;
+}
 .msg-head {
   display: flex;
   align-items: center;
@@ -650,6 +656,23 @@ textarea:focus,
   max-height: 4.6em;
   overflow-y: auto;
   color: var(--ink);
+}
+.frag-text-editable {
+  cursor: text;
+  border-radius: 5px;
+  transition: background 0.12s ease;
+}
+.frag-text-editable:hover {
+  background: var(--accent-weak);
+}
+.frag-text-edit {
+  width: 100%;
+  min-height: 58px;
+  max-height: 220px;
+  resize: vertical;
+  font-size: 12px;
+  line-height: 1.5;
+  padding: 6px 8px;
 }
 .frag-foot {
   display: flex;

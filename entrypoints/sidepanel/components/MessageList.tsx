@@ -1,5 +1,6 @@
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import type { ConversationMessage, FragmentGroup } from '../../../lib/core/types';
+import type { ActiveMessagePush } from '../../../lib/messaging/protocol';
 import type { SelectionInput } from '../useDistiller';
 import { plainify } from '../../../lib/utils/plainify';
 
@@ -40,6 +41,8 @@ interface MessageRowProps {
   open: boolean;
   added: boolean;
   canPair: boolean;
+  /** Highlighted because the ChatGPT page is currently scrolled to this message. */
+  isActive: boolean;
   onToggle: (id: string) => void;
   onAdd: (message: ConversationMessage) => void;
   onAddPair: (message: ConversationMessage) => void;
@@ -57,6 +60,7 @@ const MessageRow = memo(function MessageRow({
   open,
   added,
   canPair,
+  isActive,
   onToggle,
   onAdd,
   onAddPair,
@@ -65,7 +69,7 @@ const MessageRow = memo(function MessageRow({
   const shown = isLong && !open ? readable.slice(0, CLAMP_CHARS).trimEnd() + '…' : readable;
   return (
     <article
-      className={`msg msg-${message.role}`}
+      className={`msg msg-${message.role}${isActive ? ' msg-active' : ''}`}
       data-mid={message.id}
       data-role={message.role}
       data-order={message.order}
@@ -123,6 +127,24 @@ export function MessageList({
   const [selNote, setSelNote] = useState('');
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState('');
+  const [activeId, setActiveId] = useState<string | null>(null);
+
+  // Follow ChatGPT: when the page reports the message it scrolled to (its right-
+  // side jump, or any scroll), highlight the matching row and bring it into view —
+  // but only if it's one we've actually read into the list.
+  useEffect(() => {
+    const onMsg = (msg: unknown): undefined => {
+      const m = msg as ActiveMessagePush | undefined;
+      if (!m || m.kind !== 'active-message') return undefined;
+      const el = document.querySelector<HTMLElement>(`.msg[data-mid="${CSS.escape(m.messageId)}"]`);
+      if (!el) return undefined;
+      setActiveId(m.messageId);
+      el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      return undefined;
+    };
+    browser.runtime.onMessage.addListener(onMsg);
+    return () => browser.runtime.onMessage.removeListener(onMsg);
+  }, []);
 
   function createModule(persist: boolean) {
     const name = newName.trim();
@@ -311,6 +333,7 @@ export function MessageList({
           open={expanded.has(message.id)}
           added={addedIds.has(message.id)}
           canPair={pairableIds.has(message.id)}
+          isActive={message.id === activeId}
           onToggle={toggle}
           onAdd={onAdd}
           onAddPair={onAddPair}

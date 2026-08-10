@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Follow ChatGPT** — as you scroll the conversation or use ChatGPT's right-side
+  jump, the panel highlights and scrolls to the message you're on (for messages it
+  has read). Content script tracks the top-of-viewport message and pushes it to
+  the panel; the panel highlights the matching row and brings it into view.
+- **Edit a fragment's text** — click a fragment in the workspace to edit it inline
+  (blur to save, Esc to cancel), handy for trimming a quote before compiling.
+
 ### Fixed
 - The note-at-selection bar could be clipped by the panel edges (especially in a
   narrow side panel). It is now a full-width floating bar pinned to both panel

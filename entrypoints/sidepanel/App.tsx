@@ -306,6 +306,7 @@ export function App() {
                   onMoveToGroup={actions.moveToGroup}
                   onRemove={actions.removeFragment}
                   onSetNote={actions.setNote}
+                  onSetText={actions.setText}
                   onRemoveGroup={actions.removeGroup}
                 />
               </section>

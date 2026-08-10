@@ -102,6 +102,7 @@ type Action =
   | { type: 'move-fragment'; groupId: string; fragmentId: string; dir: -1 | 1 }
   | { type: 'move-to-group'; fromGroupId: string; toGroupId: string; fragmentId: string }
   | { type: 'set-note'; groupId: string; fragmentId: string; note: string }
+  | { type: 'set-text'; groupId: string; fragmentId: string; text: string }
   | { type: 'add-group'; id: string; title: string; persist: boolean }
   | { type: 'remove-group'; groupId: string }
   | { type: 'set-single'; key: SingleKey; presetId: string }
@@ -209,6 +210,17 @@ function reducer(state: DistillerState, action: Action): DistillerState {
           ...g,
           fragments: g.fragments.map((f) =>
             f.id === action.fragmentId ? { ...f, note: action.note } : f,
+          ),
+        })),
+      };
+
+    case 'set-text':
+      return {
+        ...state,
+        groups: mapGroup(state.groups, action.groupId, (g) => ({
+          ...g,
+          fragments: g.fragments.map((f) =>
+            f.id === action.fragmentId ? { ...f, text: action.text } : f,
           ),
         })),
       };
@@ -542,6 +554,8 @@ export function useDistiller() {
         dispatch({ type: 'move-to-group', fromGroupId, toGroupId, fragmentId }),
       setNote: (groupId: string, fragmentId: string, note: string) =>
         dispatch({ type: 'set-note', groupId, fragmentId, note }),
+      setText: (groupId: string, fragmentId: string, text: string) =>
+        dispatch({ type: 'set-text', groupId, fragmentId, text }),
       /** Create a module; returns its id so the caller can make it active. */
       addGroup: (title: string, persist = false): string => {
         const id = createId('g');

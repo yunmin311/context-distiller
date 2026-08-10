@@ -10,6 +10,7 @@ import {
   type SelectionPayload,
   type MwRequest,
   type MwResponse,
+  type ActiveMessagePush,
 } from '../lib/messaging/protocol';
 
 /**
@@ -47,8 +48,69 @@ export default defineContentScript({
       // dev reload. Nothing to do — the next fresh load registers cleanly.
       console.debug('[Context Distiller] listener not registered (context invalidated):', err);
     }
+
+    setupFollow(ctx);
   },
 });
+
+/**
+ * Track which message sits at the top of the ChatGPT viewport and push its id to
+ * the side panel, so the panel can follow the user's scrolling / right-side jump.
+ * Throttled to animation frames and to actual id changes; if the panel isn't open
+ * the send simply has no receiver.
+ */
+function setupFollow(ctx: { isInvalid: boolean }): void {
+  let scheduled = false;
+  let lastId = '';
+  const onScroll = () => {
+    if (scheduled) return;
+    scheduled = true;
+    requestAnimationFrame(() => {
+      scheduled = false;
+      if (ctx.isInvalid) return;
+      const id = topVisibleMessageId();
+      if (!id || id === lastId) return;
+      lastId = id;
+      const msg: ActiveMessagePush = { kind: 'active-message', messageId: id };
+      try {
+        void browser.runtime.sendMessage(msg).catch(() => {});
+      } catch {
+        // no receiver / context gone — ignore
+      }
+    });
+  };
+  // Capture phase catches scrolling of ChatGPT's inner message container too.
+  window.addEventListener('scroll', onScroll, true);
+}
+
+/**
+ * The message whose top sits just below the header line — i.e. the one the user
+ * has scrolled to / is reading at the top of the viewport.
+ */
+function topVisibleMessageId(): string | null {
+  const nodes = Array.from(document.querySelectorAll<HTMLElement>('[data-message-author-role]'));
+  const LINE = 140; // a little below the very top of the viewport
+  let best: HTMLElement | null = null;
+  let bestTop = -Infinity;
+  for (const n of nodes) {
+    const rect = n.getBoundingClientRect();
+    if (rect.bottom <= 0) continue; // fully scrolled above
+    if (rect.top <= LINE && rect.top > bestTop) {
+      bestTop = rect.top;
+      best = n;
+    }
+  }
+  if (!best) {
+    // Nothing crosses the line — take the first message still on screen.
+    for (const n of nodes) {
+      if (n.getBoundingClientRect().bottom > 0) {
+        best = n;
+        break;
+      }
+    }
+  }
+  return best ? best.getAttribute('data-message-id') : null;
+}
 
 /** Inject the main-world bridge; swallow failures so DOM extraction still works. */
 async function injectMainWorld(): Promise<void> {

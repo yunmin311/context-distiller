@@ -41,6 +41,18 @@ export type PanelResponse =
   | { kind: 'fill'; ok: boolean; error?: string }
   | { kind: 'error'; error: string };
 
+// --- Content Script  ->  Side Panel (push, chrome.runtime.sendMessage) -----
+
+/**
+ * Pushed as the user scrolls / jumps around the ChatGPT conversation, so the
+ * panel can follow along (scroll the matching row into view + highlight it).
+ * Fire-and-forget: if the panel isn't open, the send simply has no receiver.
+ */
+export interface ActiveMessagePush {
+  kind: 'active-message';
+  messageId: string;
+}
+
 // --- Content Script  <->  Main World Bridge (window CustomEvent) ----------
 
 export const MW_REQUEST_EVENT = 'cd:mw-request';

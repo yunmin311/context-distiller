@@ -1,4 +1,4 @@
-import { memo, useMemo } from 'react';
+import { memo, useMemo, useRef, useState } from 'react';
 import type { Fragment, FragmentGroup } from '../../../lib/core/types';
 import { plainify } from '../../../lib/utils/plainify';
 
@@ -8,6 +8,7 @@ interface GroupBoardProps {
   onMoveToGroup: (fromGroupId: string, toGroupId: string, fragmentId: string) => void;
   onRemove: (groupId: string, fragmentId: string) => void;
   onSetNote: (groupId: string, fragmentId: string, note: string) => void;
+  onSetText: (groupId: string, fragmentId: string, text: string) => void;
   onRemoveGroup: (groupId: string) => void;
 }
 
@@ -29,6 +30,7 @@ interface FragmentRowProps {
   onMove: (groupId: string, fragmentId: string, dir: -1 | 1) => void;
   onRemove: (groupId: string, fragmentId: string) => void;
   onSetNote: (groupId: string, fragmentId: string, note: string) => void;
+  onSetText: (groupId: string, fragmentId: string, text: string) => void;
   onMoveToGroup: (fromGroupId: string, toGroupId: string, fragmentId: string) => void;
 }
 
@@ -46,9 +48,31 @@ const FragmentRow = memo(function FragmentRow({
   onMove,
   onRemove,
   onSetNote,
+  onSetText,
   onMoveToGroup,
 }: FragmentRowProps) {
   const others = moveTargets.filter((t) => t.id !== groupId);
+  const display = plainify(fragment.text);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState('');
+  const cancelRef = useRef(false);
+
+  function startEdit() {
+    setDraft(display);
+    cancelRef.current = false;
+    setEditing(true);
+  }
+  function commitEdit() {
+    if (cancelRef.current) {
+      cancelRef.current = false;
+      setEditing(false);
+      return;
+    }
+    const t = draft.trim();
+    if (t && t !== display) onSetText(groupId, fragment.id, t);
+    setEditing(false);
+  }
+
   return (
     <li className="frag">
       <div className="frag-head">
@@ -81,7 +105,31 @@ const FragmentRow = memo(function FragmentRow({
           ✕
         </button>
       </div>
-      <div className="frag-text">{plainify(fragment.text)}</div>
+
+      {editing ? (
+        <textarea
+          className="input frag-text-edit"
+          autoFocus
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={commitEdit}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') {
+              cancelRef.current = true;
+              setEditing(false);
+            }
+          }}
+        />
+      ) : (
+        <div
+          className="frag-text frag-text-editable"
+          title="点击编辑这段正文（失焦保存，Esc 取消）"
+          onClick={startEdit}
+        >
+          {display}
+        </div>
+      )}
+
       <div className="frag-foot">
         <input
           className="input note-input"
@@ -122,6 +170,7 @@ export function GroupBoard({
   onMoveToGroup,
   onRemove,
   onSetNote,
+  onSetText,
   onRemoveGroup,
 }: GroupBoardProps) {
   // Stable move-target list (id + title), rebuilt only when group ids/titles
@@ -173,6 +222,7 @@ export function GroupBoard({
                       onMove={onMove}
                       onRemove={onRemove}
                       onSetNote={onSetNote}
+                      onSetText={onSetText}
                       onMoveToGroup={onMoveToGroup}
                     />
                   ))}
