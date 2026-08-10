@@ -516,27 +516,40 @@ textarea:focus,
   font-weight: 600;
 }
 
-/* Highlight-to-add chip — the signature interaction. */
+/* Highlight-to-add bar — the signature interaction. Spans the panel width
+   (left/right pinned) so it can never be clipped, however narrow the panel is;
+   only its vertical position tracks the selection. */
 .sel-pop {
   position: fixed;
+  left: 8px;
+  right: 8px;
   z-index: 60;
-  transform: translate(-50%, -100%);
   display: flex;
   align-items: center;
   gap: 6px;
   background: var(--sel);
   color: var(--sel-ink);
   border: none;
-  border-radius: 8px;
-  padding: 5px 6px;
+  border-radius: 9px;
+  padding: 6px 8px;
   box-shadow: var(--shadow-pop);
   animation: pop-in 0.12s ease-out;
 }
+.sel-pop-preview {
+  flex: 0 1 auto;
+  max-width: 92px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  opacity: 0.72;
+}
 .sel-pop-note {
-  width: 132px;
+  flex: 1 1 60px;
+  min-width: 48px;
   border: none;
-  border-radius: 5px;
-  padding: 4px 7px;
+  border-radius: 6px;
+  padding: 5px 8px;
   font-family: inherit;
   font-size: 12px;
   background: rgba(255, 255, 255, 0.14);
@@ -545,41 +558,23 @@ textarea:focus,
 }
 .sel-pop-note::placeholder {
   color: var(--sel-ink);
-  opacity: 0.55;
+  opacity: 0.5;
 }
 .sel-pop-add {
   flex: 0 0 auto;
   border: none;
-  border-radius: 5px;
-  padding: 4px 9px;
+  border-radius: 6px;
+  padding: 5px 10px;
   font-family: inherit;
   font-size: 12px;
   font-weight: 600;
   white-space: nowrap;
   cursor: pointer;
-  background: rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.18);
   color: var(--sel-ink);
 }
 .sel-pop-add:hover {
-  background: rgba(255, 255, 255, 0.26);
-}
-.sel-pop::after {
-  content: '';
-  position: absolute;
-  left: 50%;
-  top: 100%;
-  transform: translateX(-50%);
-  border: 5px solid transparent;
-  border-top-color: var(--sel);
-}
-.sel-pop-below {
-  transform: translate(-50%, 0);
-}
-.sel-pop-below::after {
-  top: auto;
-  bottom: 100%;
-  border-top-color: transparent;
-  border-bottom-color: var(--sel);
+  background: rgba(255, 255, 255, 0.28);
 }
 @keyframes pop-in {
   from {

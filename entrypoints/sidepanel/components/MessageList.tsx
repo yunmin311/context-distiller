@@ -20,13 +20,13 @@ interface MessageListProps {
 const NEW_MODULE = '__new__';
 
 interface Popover extends SelectionInput {
-  x: number;
-  y: number;
-  below: boolean;
+  /** Vertical position (px, viewport). The bar spans the panel width itself. */
+  top: number;
 }
 
 const CLAMP_CHARS = 220;
-const TOP_SAFE = 96; // topbar + conv bar — flip the chip below the selection above this
+const TOP_SAFE = 96; // topbar + conv bar — place the bar below a selection above this
+const BAR_H = 40; // approximate bar height, for vertical clamping
 
 function roleLabel(role: ConversationMessage['role']): string {
   if (role === 'user') return '你';
@@ -144,17 +144,14 @@ export function MessageList({
     [messages],
   );
 
-  // Dismiss the highlight chip whenever the panel scrolls or resizes — its
-  // position is fixed to the viewport and would otherwise drift.
+  // The bar spans the panel width at a fixed position, so scrolling no longer
+  // needs to dismiss it (you can scroll to check context while writing the note).
+  // A resize can shift the layout, so dismiss on that.
   useEffect(() => {
     if (!popover) return;
     const dismiss = () => setPopover(null);
-    document.addEventListener('scroll', dismiss, true);
     window.addEventListener('resize', dismiss);
-    return () => {
-      document.removeEventListener('scroll', dismiss, true);
-      window.removeEventListener('resize', dismiss);
-    };
+    return () => window.removeEventListener('resize', dismiss);
   }, [popover]);
 
   // Stable so the memoized rows don't re-render when it's recreated.
@@ -188,22 +185,21 @@ export function MessageList({
       setPopover(null);
       return;
     }
-    // Position near where the selection ends (its last line), and flip below
-    // when the selection sits under the sticky header.
+    // Full-width bar: only its vertical position tracks the selection. Place it
+    // below the selection when that sits under the sticky header, else above;
+    // clamp so the whole bar stays on screen.
     const rects = range.getClientRects();
     const rect = rects[rects.length - 1] ?? range.getBoundingClientRect();
-    const below = rect.top < TOP_SAFE;
-    // Keep the chip inside the panel so it never squishes against an edge.
-    const x = Math.min(Math.max(rect.left + rect.width / 2, 90), window.innerWidth - 90);
+    const nearTop = rect.top < TOP_SAFE + BAR_H;
+    let top = nearTop ? rect.bottom + 8 : rect.top - 8 - BAR_H;
+    top = Math.min(Math.max(top, 8), window.innerHeight - BAR_H - 8);
     setSelNote('');
     setPopover({
       text,
       role: msgEl.dataset.role === 'user' ? 'user' : 'assistant',
       messageId: msgEl.dataset.mid,
       sourceOrder: Number(msgEl.dataset.order ?? 0),
-      x,
-      y: below ? rect.bottom + 8 : rect.top - 8,
-      below,
+      top,
     });
   }
 
@@ -327,9 +323,14 @@ export function MessageList({
 
       {popover && (
         <div
-          className={`sel-pop ${popover.below ? 'sel-pop-below' : ''}`}
-          style={{ left: popover.x, top: popover.y }}
+          className="sel-pop"
+          style={{ top: popover.top }}
+          role="dialog"
+          aria-label="给选中文本加注释并加入"
         >
+          <span className="sel-pop-preview" title={popover.text}>
+            「{popover.text.length > 14 ? popover.text.slice(0, 14).trim() + '…' : popover.text}」
+          </span>
           <input
             className="sel-pop-note"
             autoFocus
@@ -342,7 +343,7 @@ export function MessageList({
             }}
           />
           <button className="sel-pop-add" onClick={commitSelection}>
-            ＋ 加入选中
+            ＋ 加入
           </button>
         </div>
       )}

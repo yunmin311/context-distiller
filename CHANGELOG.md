@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- The note-at-selection bar could be clipped by the panel edges (especially in a
+  narrow side panel). It is now a full-width floating bar pinned to both panel
+  edges, so it can never be cut off; it also shows a preview of the selected text.
+- Scrolling no longer dismisses that bar (the bar is fixed and doesn't drift), so
+  you can scroll to check context while writing the note.
+
 ## [0.3.0] — 2026-08-10
 
 ### Added
