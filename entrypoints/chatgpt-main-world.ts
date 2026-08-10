@@ -88,23 +88,74 @@ export default defineUnlistedScript(() => {
     return messages;
   }
 
+  /**
+   * Fetch the COMPLETE conversation from ChatGPT's own backend. This runs in the
+   * PAGE world, so the same-origin session auth works exactly like the site's own
+   * requests (a content-script fetch in the isolated world can't reliably
+   * authenticate — that made long reads fall back to the mounted DOM and return
+   * only part of the thread). One request returns every turn, any length.
+   */
+  async function extractViaApi(): Promise<MwRawMessage[] | null> {
+    const convId = location.pathname.match(/\/c\/([\w-]+)/)?.[1];
+    if (!convId) return null;
+
+    const session = await fetch('/api/auth/session', { credentials: 'include' })
+      .then((r) => (r.ok ? r.json() : null))
+      .catch(() => null);
+    const token: string | undefined = session?.accessToken;
+    if (!token) return null;
+
+    const conv = await fetch(`/backend-api/conversation/${convId}`, {
+      headers: { Authorization: `Bearer ${token}` },
+      credentials: 'include',
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .catch(() => null);
+    const mapping = conv?.mapping;
+    if (!mapping || typeof mapping !== 'object') return null;
+
+    const rows: Array<{ id: string; role: string; text: string; t: number }> = [];
+    for (const node of Object.values(mapping) as any[]) {
+      const msg = node?.message;
+      if (!msg?.author) continue;
+      const role = msg.author.role;
+      if (role !== 'user' && role !== 'assistant') continue; // drop tool / system
+      if (msg.recipient && msg.recipient !== 'all') continue; // drop tool-directed
+      if (msg.metadata?.is_visually_hidden_from_conversation) continue; // drop hidden
+      const text = partsToText(msg.content);
+      if (!text) continue;
+      rows.push({ id: msg.id ?? node.id, role, text, t: msg.create_time ?? 0 });
+    }
+    if (rows.length === 0) return null;
+    rows.sort((a, b) => a.t - b.t); // chronological = conversation order
+    return rows.map((r) => ({ id: r.id, role: r.role, text: r.text }));
+  }
+
   window.addEventListener(MW_REQUEST_EVENT, (event: Event) => {
     const detail = (event as CustomEvent<MwRequest>).detail;
-    if (!detail || detail.action !== 'extract') return;
+    if (!detail) return;
+    const respond = (r: MwResponse) =>
+      window.dispatchEvent(new CustomEvent(MW_RESPONSE_EVENT, { detail: r }));
 
-    let response: MwResponse;
-    try {
-      const messages = extract();
-      response = {
-        id: detail.id,
-        ok: messages.length > 0,
-        title: document.title,
-        messages,
-      };
-    } catch (err) {
-      response = { id: detail.id, ok: false, error: String(err) };
+    if (detail.action === 'extract-api') {
+      extractViaApi()
+        .then((messages) =>
+          respond({
+            id: detail.id,
+            ok: !!messages && messages.length > 0,
+            title: document.title,
+            messages: messages ?? [],
+          }),
+        )
+        .catch((err) => respond({ id: detail.id, ok: false, error: String(err) }));
+      return;
     }
 
-    window.dispatchEvent(new CustomEvent(MW_RESPONSE_EVENT, { detail: response }));
+    try {
+      const messages = extract();
+      respond({ id: detail.id, ok: messages.length > 0, title: document.title, messages });
+    } catch (err) {
+      respond({ id: detail.id, ok: false, error: String(err) });
+    }
   });
 });

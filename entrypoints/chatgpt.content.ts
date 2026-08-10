@@ -50,73 +50,6 @@ export default defineContentScript({
   },
 });
 
-/**
- * Read the WHOLE conversation straight from ChatGPT's own backend. ChatGPT keeps
- * the full thread client-side and serves it from its own API, so one request
- * gets EVERY turn regardless of length — beating the DOM, which is virtualized
- * down to a screenful (that's why long threads only read ~15%). Same-origin,
- * uses the user's own session, uploads nothing anywhere. Returns null when it
- * can't be used (new chat / not signed in / endpoint changed) so the DOM path
- * takes over.
- */
-async function readViaApi(): Promise<RawMessage[] | null> {
-  try {
-    const convId = location.pathname.match(/\/c\/([\w-]+)/)?.[1];
-    if (!convId) return null;
-
-    const session = await fetch('/api/auth/session', { credentials: 'include' })
-      .then((r) => (r.ok ? r.json() : null))
-      .catch(() => null);
-    const token: string | undefined = session?.accessToken;
-    if (!token) return null;
-
-    const conv = await fetch(`/backend-api/conversation/${convId}`, {
-      headers: { Authorization: `Bearer ${token}` },
-      credentials: 'include',
-    })
-      .then((r) => (r.ok ? r.json() : null))
-      .catch(() => null);
-    const mapping = conv?.mapping;
-    if (!mapping || typeof mapping !== 'object') return null;
-
-    const rows: Array<{ id: string; role: string; text: string; t: number }> = [];
-    for (const node of Object.values(mapping) as Array<Record<string, any>>) {
-      const msg = node?.message;
-      if (!msg?.author) continue;
-      const role: string = msg.author.role;
-      if (role !== 'user' && role !== 'assistant') continue; // drop tool / system
-      if (msg.recipient && msg.recipient !== 'all') continue; // drop tool-directed
-      if (msg.metadata?.is_visually_hidden_from_conversation) continue; // drop hidden
-      const text = contentToText(msg.content);
-      if (!text) continue;
-      rows.push({ id: msg.id ?? node.id, role, text, t: msg.create_time ?? 0 });
-    }
-    if (rows.length === 0) return null;
-    rows.sort((a, b) => a.t - b.t); // chronological = conversation order
-    return rows.map((r) => ({ id: r.id, role: r.role, text: r.text, source: 'page-data' as const }));
-  } catch {
-    return null;
-  }
-}
-
-/** Pull readable text out of a ChatGPT message `content` object. */
-function contentToText(content: any): string {
-  if (!content) return '';
-  const t = content.content_type;
-  if (t === 'text' || !t) {
-    return (content.parts || []).filter((p: unknown) => typeof p === 'string').join('\n').trim();
-  }
-  if (t === 'multimodal_text') {
-    return (content.parts || [])
-      .map((p: any) => (typeof p === 'string' ? p : p?.text || ''))
-      .filter(Boolean)
-      .join('\n')
-      .trim();
-  }
-  if (t === 'code') return typeof content.text === 'string' ? content.text : '';
-  return '';
-}
-
 /** Inject the main-world bridge; swallow failures so DOM extraction still works. */
 async function injectMainWorld(): Promise<void> {
   try {
@@ -129,7 +62,10 @@ async function injectMainWorld(): Promise<void> {
 let mwCounter = 0;
 
 /** Ask the main-world bridge to extract messages; resolves null on timeout. */
-function requestMainWorld(timeoutMs: number): Promise<MwResponse | null> {
+function requestMainWorld(
+  timeoutMs: number,
+  action: MwRequest['action'] = 'extract',
+): Promise<MwResponse | null> {
   return new Promise((resolve) => {
     const id = `mw_${mwCounter++}_${Math.random().toString(36).slice(2, 8)}`;
     let settled = false;
@@ -144,7 +80,7 @@ function requestMainWorld(timeoutMs: number): Promise<MwResponse | null> {
 
     window.addEventListener(MW_RESPONSE_EVENT, onResponse);
     window.dispatchEvent(
-      new CustomEvent<MwRequest>(MW_REQUEST_EVENT, { detail: { id, action: 'extract' } }),
+      new CustomEvent<MwRequest>(MW_REQUEST_EVENT, { detail: { id, action } }),
     );
 
     setTimeout(() => {
@@ -184,10 +120,18 @@ async function getConversation(): Promise<PanelResponse> {
   let source: MessageSource;
   let partial: boolean;
 
-  // Primary: pull the COMPLETE thread from ChatGPT's backend (any length).
-  const apiRaw = await readViaApi();
-  if (apiRaw && apiRaw.length > 0) {
-    raw = apiRaw;
+  // Primary: full thread from ChatGPT's backend, fetched in the MAIN WORLD (page
+  // context — same-origin session auth works there, unlike an isolated-world
+  // fetch, which made long reads silently fall back to a partial DOM read).
+  // Generous timeout so a big conversation's JSON has time to arrive.
+  const api = await requestMainWorld(8000, 'extract-api');
+  if (api?.ok && api.messages && api.messages.length > 0) {
+    raw = api.messages.map((m) => ({
+      id: m.id,
+      role: m.role,
+      text: m.text,
+      source: 'page-data' as const,
+    }));
     source = 'page-data';
     partial = false; // the whole conversation, not just what's mounted
   } else {

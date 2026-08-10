@@ -60,7 +60,10 @@ export const MW_RESPONSE_EVENT = 'cd:mw-response';
 
 export interface MwRequest {
   id: string;
-  action: 'extract';
+  /** `extract` = read mounted DOM via React fibers; `extract-api` = fetch the
+   *  COMPLETE conversation from ChatGPT's backend (runs in the page world so the
+   *  same-origin session auth works). */
+  action: 'extract' | 'extract-api';
 }
 
 export interface MwRawMessage {
