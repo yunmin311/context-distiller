@@ -161,7 +161,9 @@ async function getConversation(): Promise<PanelResponse> {
     partial = true;
   }
 
-  console.debug('[Context Distiller] read', { count: raw.length, via: partial ? 'dom' : 'api' });
+  console.log(
+    `[Context Distiller] read ${raw.length} messages via ${partial ? 'DOM (partial — API unavailable)' : 'API (full)'}`,
+  );
 
   const messages = normalizeMessages(raw);
   if (messages.length === 0) {
