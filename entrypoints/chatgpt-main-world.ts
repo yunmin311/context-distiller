@@ -114,21 +114,33 @@ export default defineUnlistedScript(() => {
     const mapping = conv?.mapping;
     if (!mapping || typeof mapping !== 'object') return null;
 
-    const rows: Array<{ id: string; role: string; text: string; t: number }> = [];
-    for (const node of Object.values(mapping) as any[]) {
+    // Walk ONLY the active branch (current node → root), so regenerated / edited
+    // dead branches are excluded and the order is exactly what's shown on screen.
+    const path: any[] = [];
+    let id: string | undefined = conv.current_node;
+    let guard = 0;
+    while (id && mapping[id] && guard < 5000) {
+      path.push(mapping[id]);
+      id = mapping[id].parent;
+      guard += 1;
+    }
+    path.reverse(); // root → leaf = display order
+
+    const out: MwRawMessage[] = [];
+    for (const node of path) {
       const msg = node?.message;
       if (!msg?.author) continue;
       const role = msg.author.role;
       if (role !== 'user' && role !== 'assistant') continue; // drop tool / system
       if (msg.recipient && msg.recipient !== 'all') continue; // drop tool-directed
       if (msg.metadata?.is_visually_hidden_from_conversation) continue; // drop hidden
+      const ctype = msg.content?.content_type;
+      if (ctype === 'thoughts' || ctype === 'reasoning_recap') continue; // internal reasoning, not shown
       const text = partsToText(msg.content);
       if (!text) continue;
-      rows.push({ id: msg.id ?? node.id, role, text, t: msg.create_time ?? 0 });
+      out.push({ id: msg.id, role, text });
     }
-    if (rows.length === 0) return null;
-    rows.sort((a, b) => a.t - b.t); // chronological = conversation order
-    return rows.map((r) => ({ id: r.id, role: r.role, text: r.text }));
+    return out.length > 0 ? out : null;
   }
 
   window.addEventListener(MW_REQUEST_EVENT, (event: Event) => {
