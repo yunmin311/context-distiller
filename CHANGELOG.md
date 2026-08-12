@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Follow ChatGPT** (re-added) — as you scroll the conversation or use ChatGPT's
+  right-side jump, the panel highlights the message you're on and scrolls it into
+  view. The scroll listener is now removed when the content-script context is
+  invalidated (an orphaned instance after an extension reload), and sends are
+  guarded by `ctx.isInvalid`, so it can't keep firing on a dead context — which is
+  what produced the earlier reload-time errors.
+
 ## [0.4.0] — 2026-08-12
 
 ### Added
