@@ -134,6 +134,7 @@ export default defineUnlistedScript(() => {
       if (role !== 'user' && role !== 'assistant') continue; // drop tool / system
       if (msg.recipient && msg.recipient !== 'all') continue; // drop tool-directed
       if (msg.metadata?.is_visually_hidden_from_conversation) continue; // drop hidden
+      if (msg.metadata?.is_thinking_preamble_message) continue; // "我先…" thinking preview, not the answer
       const ctype = msg.content?.content_type;
       if (ctype === 'thoughts' || ctype === 'reasoning_recap') continue; // internal reasoning, not shown
       const text = partsToText(msg.content);
