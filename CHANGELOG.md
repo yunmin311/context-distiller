@@ -7,10 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Performance
-- Message rows use `content-visibility: auto`, so the browser skips rendering
-  off-screen messages — a long conversation (now read in full) paints fast even
-  on a low-end machine, with no JS windowing.
+## [0.5.0] — 2026-08-12
 
 ### Added
 - **Follow ChatGPT** (re-added) — as you scroll the conversation or use ChatGPT's
@@ -19,6 +16,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   invalidated (an orphaned instance after an extension reload), and sends are
   guarded by `ctx.isInvalid`, so it can't keep firing on a dead context — which is
   what produced the earlier reload-time errors.
+
+### Fixed
+- A split answer (ChatGPT sometimes breaks one reply into several adjacent
+  messages) now reads as one turn — consecutive same-role messages are merged
+  (blank-line separated) after the reasoning / thinking-preview filters.
+
+### Performance
+- Message rows use `content-visibility: auto`, so the browser skips rendering
+  off-screen messages — a long conversation (now read in full) paints fast even
+  on a low-end machine, with no JS windowing.
 
 ## [0.4.0] — 2026-08-12
 
@@ -114,7 +121,8 @@ to the user. Local-only — no model API, no server, no tracking, never auto-sen
   guard on the display de-Markdown pass, a wrong-tab reload guard, and
   bounds / validation on stored config.
 
-[Unreleased]: https://github.com/yunmin311/context-distiller/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/yunmin311/context-distiller/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/yunmin311/context-distiller/releases/tag/v0.5.0
 [0.4.0]: https://github.com/yunmin311/context-distiller/releases/tag/v0.4.0
 [0.3.0]: https://github.com/yunmin311/context-distiller/releases/tag/v0.3.0
 [0.2.0]: https://github.com/yunmin311/context-distiller/releases/tag/v0.2.0
