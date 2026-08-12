@@ -139,7 +139,15 @@ export default defineUnlistedScript(() => {
       if (ctype === 'thoughts' || ctype === 'reasoning_recap') continue; // internal reasoning, not shown
       const text = partsToText(msg.content);
       if (!text) continue;
-      out.push({ id: msg.id, role, text });
+      // Merge consecutive same-role messages: ChatGPT can split one answer into
+      // several adjacent assistant nodes, which would otherwise show as a turn cut
+      // into pieces. Keep the first node's id; join the parts with a blank line.
+      const last = out[out.length - 1];
+      if (last && last.role === role) {
+        last.text = `${last.text}\n\n${text}`;
+      } else {
+        out.push({ id: msg.id, role, text });
+      }
     }
     return out.length > 0 ? out : null;
   }
