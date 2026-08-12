@@ -7,17 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] — 2026-08-12
+
 ### Added
 - **Edit a fragment's text** — click a fragment in the workspace to edit it inline
   (blur to save, Esc to cancel), handy for trimming a quote before compiling.
 
 ### Changed
-- **Reading now loads the COMPLETE conversation from ChatGPT's own backend** (a
-  same-origin GET using your existing session), so long virtualized threads read
-  in full and instantly. The previous DOM read only saw the messages ChatGPT keeps
-  mounted (~a screenful), which is why long threads came back mostly empty; that
-  DOM read stays as a fallback (new chats / when the API isn't available). Nothing
-  is uploaded anywhere — see docs/PRIVACY.md.
+- **Reading now loads the COMPLETE conversation from ChatGPT's own backend**, so
+  long threads read in full and instantly. ChatGPT virtualizes long threads (only
+  a screenful is in the DOM), so the old DOM read returned just a fraction. The
+  page-world bridge now fetches the whole conversation from ChatGPT's own API
+  (same-origin, your existing session, nothing uploaded), follows the active
+  branch (dropping regenerated / edited dead branches so order is exact), and
+  skips the model's internal reasoning and "thinking-preview" preambles — so each
+  turn is a clean question + answer. The DOM read stays as a fallback (new chats /
+  when the API isn't available). See docs/PRIVACY.md.
 
 ### Fixed
 - The note-at-selection bar could be clipped by the panel edges (especially in a
@@ -96,7 +101,8 @@ to the user. Local-only — no model API, no server, no tracking, never auto-sen
   guard on the display de-Markdown pass, a wrong-tab reload guard, and
   bounds / validation on stored config.
 
-[Unreleased]: https://github.com/yunmin311/context-distiller/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/yunmin311/context-distiller/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/yunmin311/context-distiller/releases/tag/v0.4.0
 [0.3.0]: https://github.com/yunmin311/context-distiller/releases/tag/v0.3.0
 [0.2.0]: https://github.com/yunmin311/context-distiller/releases/tag/v0.2.0
 [0.1.0]: https://github.com/yunmin311/context-distiller/releases/tag/v0.1.0

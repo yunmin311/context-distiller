@@ -1,6 +1,6 @@
 {
   "name": "context-distiller",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": true,
   "type": "module",
   "description": "Context Distiller — a temporary material-selection + Prompt-compilation workbench that runs beside AI chats. MVP targets ChatGPT. No model API, no server, no persistence, no file export, never auto-sends.",

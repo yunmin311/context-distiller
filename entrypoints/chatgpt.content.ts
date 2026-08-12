@@ -29,8 +29,6 @@ export default defineContentScript({
     // browser.runtime. A page refresh replaces it with a fresh, valid instance.
     if (ctx.isInvalid) return;
 
-    console.log('[Context Distiller] active on this page');
-
     // Inject the main-world bridge (fire-and-forget; DOM extraction is the fallback).
     void injectMainWorld();
 
@@ -163,8 +161,8 @@ async function getConversation(): Promise<PanelResponse> {
     partial = true;
   }
 
-  console.log(
-    `[Context Distiller] read ${raw.length} messages via ${partial ? 'DOM (partial — API unavailable)' : 'API (full)'}`,
+  console.debug(
+    `[Context Distiller] read ${raw.length} messages via ${partial ? 'DOM (partial)' : 'API (full)'}`,
   );
 
   const messages = normalizeMessages(raw);
