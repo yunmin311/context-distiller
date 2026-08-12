@@ -436,6 +436,11 @@ textarea:focus,
 .msg {
   border-radius: var(--radius);
   padding: 9px 11px;
+  /* Skip rendering off-screen messages so a long conversation (dozens of long
+     turns) paints fast even on a low-end machine — virtual-list-like, no JS.
+     `auto` lets the browser remember each row's real height after first paint. */
+  content-visibility: auto;
+  contain-intrinsic-size: auto 96px;
 }
 .msg-user {
   background: var(--sunken);

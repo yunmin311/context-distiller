@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Performance
+- Message rows use `content-visibility: auto`, so the browser skips rendering
+  off-screen messages — a long conversation (now read in full) paints fast even
+  on a low-end machine, with no JS windowing.
+
 ### Added
 - **Follow ChatGPT** (re-added) — as you scroll the conversation or use ChatGPT's
   right-side jump, the panel highlights the message you're on and scrolls it into
