@@ -41,16 +41,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   tint rather than saturated paint. Greyscale is rejected as an accent (ChatGPT's
   primary button is monochrome), in which case the panel keeps its own neutral
   accent; the OS preference still applies when the page can't be read.
-- **Frosted-glass action bar** — the footer is now pinned **over** the message list
-  with a translucent ground and a real backdrop blur, so messages scroll softly
-  visible beneath it (Apple-style, in the spirit of ChatGPT's scroll-to-bottom
-  button); the highlight-to-add bar and the toast get the same treatment. Glass is
-  used **only** where a surface genuinely floats above scrolling content —
+- **Frosted-glass action pills** — 预览 / 复制 / 填入 are frosted glass: the footer
+  bar behind them is fully transparent and pinned over the message list, so the
+  pills' backdrop blur has the scrolling messages behind it to work on (Apple-style,
+  in the spirit of ChatGPT's scroll-to-bottom button). Glass is used **only** there:
   `backdrop-filter` on an element sitting on the panel's opaque background has
-  nothing to see through and degrades into a flat grey block, which is what an
-  earlier pass mistakenly shipped on buttons and chips. Those are now a solid
-  accent pill (primary) and soft accent washes (selected chips). Falls back to the
-  plain opaque bar where blur isn't supported.
+  nothing to see through and degrades into a flat grey block. Falls back to opaque
+  pills where blur isn't supported.
 - **Prompt library** — a built-in, **offline** set of ready-made "requirement"
   prompts (总结提炼 / 分析审视 / 改写润色 / 结构化 / 迁移交接) you can pull into a
   custom requirement via **从库导入**, then rename / trim / keep. Several entries

@@ -38,12 +38,14 @@
   /* Flat accent washes — for chips/buttons that sit ON the panel (no blur, since
      there is nothing behind them to blur). Fallbacks precede the color-mix forms
      for browsers without color-mix (Chrome < 111). */
-  --accent-tint: rgba(20, 20, 25, 0.06);
-  --accent-tint-strong: rgba(20, 20, 25, 0.11);
-  --accent-edge: rgba(20, 20, 25, 0.16);
-  --accent-tint: color-mix(in srgb, var(--accent) 14%, transparent);
-  --accent-tint-strong: color-mix(in srgb, var(--accent) 24%, transparent);
-  --accent-edge: color-mix(in srgb, var(--accent) 38%, transparent);
+  --accent-tint: rgba(20, 20, 25, 0.08);
+  --accent-tint-strong: rgba(20, 20, 25, 0.16);
+  --accent-tint-stronger: rgba(20, 20, 25, 0.24);
+  --accent-edge: rgba(20, 20, 25, 0.2);
+  --accent-tint: color-mix(in srgb, var(--accent) 18%, transparent);
+  --accent-tint-strong: color-mix(in srgb, var(--accent) 34%, transparent);
+  --accent-tint-stronger: color-mix(in srgb, var(--accent) 46%, transparent);
+  --accent-edge: color-mix(in srgb, var(--accent) 48%, transparent);
 
   --radius: 12px;
   --radius-sm: 9px;
@@ -81,12 +83,14 @@
     --glass-bg-hover: rgba(52, 52, 58, 0.78);
     --glass-line: rgba(255, 255, 255, 0.1);
     --glass-shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 6px 20px rgba(0, 0, 0, 0.4);
-    --accent-tint: rgba(255, 255, 255, 0.08);
-    --accent-tint-strong: rgba(255, 255, 255, 0.14);
-    --accent-edge: rgba(255, 255, 255, 0.2);
-    --accent-tint: color-mix(in srgb, var(--accent) 18%, transparent);
-    --accent-tint-strong: color-mix(in srgb, var(--accent) 30%, transparent);
-    --accent-edge: color-mix(in srgb, var(--accent) 45%, transparent);
+    --accent-tint: rgba(255, 255, 255, 0.1);
+    --accent-tint-strong: rgba(255, 255, 255, 0.18);
+    --accent-tint-stronger: rgba(255, 255, 255, 0.26);
+    --accent-edge: rgba(255, 255, 255, 0.24);
+    --accent-tint: color-mix(in srgb, var(--accent) 22%, transparent);
+    --accent-tint-strong: color-mix(in srgb, var(--accent) 38%, transparent);
+    --accent-tint-stronger: color-mix(in srgb, var(--accent) 50%, transparent);
+    --accent-edge: color-mix(in srgb, var(--accent) 52%, transparent);
   }
 }
 :root[data-theme='dark'] {
@@ -241,10 +245,9 @@ body {
   background: var(--line);
 }
 
-/* The action bar — THE frosted-glass surface of the panel. It overlays the
-   scrolling list (which keeps sliding under it), so the backdrop blur has real
-   content to work on: you see the messages softly through it, Apple-style / like
-   ChatGPT's scroll-to-bottom button. */
+/* The action bar itself is TRANSPARENT — it only positions the pills. The glass
+   lives on the pills (预览 / 复制 / 填入), which float over the scrolling list, so
+   their backdrop blur has the messages behind them to work on. */
 .app-footer {
   /* Pinned OVER the list (not a flex sibling that pushes it), so messages scroll
      underneath and are visible-but-blurred through the bar. `.app-main` carries
@@ -258,17 +261,22 @@ body {
   flex-direction: column;
   gap: 5px;
   padding: 6px 12px 9px;
-  background: var(--glass-bg);
-  backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
-  border-top: 1px solid var(--glass-line);
-  box-shadow: var(--glass-shadow);
+  background: transparent;
+  border-top: none;
+  /* Only the bar's own chrome is see-through; clicks still land on its controls. */
+  pointer-events: none;
 }
-/* No blur support → fall back to the plain opaque bar rather than a washed one. */
+.app-footer > * {
+  pointer-events: auto;
+}
+/* No blur support → give the pills an opaque ground so they stay readable. */
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   .app-footer {
     background: var(--surface);
-    border-top-color: var(--line);
+    border-top: 1px solid var(--line);
+  }
+  .btn-outline {
+    background: var(--surface);
   }
 }
 .app-footer > .muted {
@@ -409,25 +417,31 @@ body {
   opacity: 0.38;
   cursor: not-allowed;
 }
-/* Primary action — a solid accent pill (readable, unmistakable). The GLASS in
-   this product is the footer bar itself, which floats over the scrolling list;
-   putting a blur on a button that sits on an opaque panel just yields grey. */
+/* The three footer pills (预览 / 复制 / 填入) are THE glass surfaces: they sit on
+   the transparent action bar, so the blur has the scrolling messages behind it to
+   work on. Primary keeps the borrowed (desaturated) accent tint. */
 .btn-primary {
-  background: var(--sel);
-  color: var(--sel-ink);
+  background: var(--accent-tint-strong);
+  border-color: var(--accent-edge);
+  color: var(--ink);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  box-shadow: var(--glass-shadow);
 }
 .btn-primary:hover:not(:disabled) {
-  opacity: 0.86;
+  background: var(--accent-tint-stronger);
 }
-/* Secondary actions — quiet, translucent white over the glass bar. */
+/* Secondary actions — the same glass, untinted. */
 .btn-outline {
-  background: var(--glass-bg-hover);
+  background: var(--glass-bg);
   border-color: var(--glass-line);
   color: var(--ink);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  box-shadow: var(--glass-shadow);
 }
 .btn-outline:hover:not(:disabled) {
-  background: var(--surface);
-  border-color: var(--line-2);
+  background: var(--glass-bg-hover);
 }
 .btn-ghost {
   background: transparent;
@@ -789,15 +803,11 @@ textarea:focus,
   display: flex;
   align-items: center;
   gap: 6px;
-  /* Genuinely floats over the scrolling messages, so the blur has real content to
-     work on — glass belongs here. */
-  background: var(--glass-bg);
+  background: var(--surface);
   color: var(--ink);
-  border: 1px solid var(--glass-line);
+  border: 1px solid var(--accent-edge);
   border-radius: 9px;
   padding: 6px 8px;
-  backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
   box-shadow: var(--shadow-pop);
   animation: pop-in 0.12s ease-out;
 }
@@ -1254,11 +1264,8 @@ textarea:focus,
   border-radius: 999px;
   font-size: 12px;
   font-weight: 600;
-  color: var(--ink);
-  background: var(--glass-bg-hover);
-  border: 1px solid var(--glass-line);
-  backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
+  color: var(--sel-ink);
+  background: var(--sel);
   box-shadow: var(--shadow-pop);
   animation: toast-in 0.14s ease-out;
 }
