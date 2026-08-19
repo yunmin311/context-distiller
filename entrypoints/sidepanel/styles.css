@@ -228,6 +228,48 @@ body {
   cursor: pointer;
   accent-color: var(--accent);
 }
+.footer-meta-left {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+/* 便签 (scratchpad) — private annotation pad. Never compiled into the output. */
+.scratch-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  border: none;
+  background: none;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  cursor: pointer;
+  transition: color 0.14s;
+}
+.scratch-toggle:hover,
+.scratch-toggle-on {
+  color: var(--ink);
+}
+.scratch-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+.scratchpad {
+  display: flex;
+}
+.scratchpad-text {
+  width: 100%;
+  min-height: 66px;
+  max-height: 180px;
+  resize: vertical;
+  line-height: 1.5;
+}
 
 /* --- intro / notices -------------------------------------------------- */
 

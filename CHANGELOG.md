@@ -8,13 +8,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **便签 (scratchpad)** — a single free-text annotation pad in the footer (toggle it
+  open beside 「记住本次」; a dot on the toggle signals it has content). Purely
+  personal notes for your own use: it **never compiles into the output** and is
+  never passed to the compiler at all — the deliberate opposite of **消息标记**,
+  which *do* compile into their own 【标记】 section. Stored as long-term local
+  config (like a custom requirement), so it persists across sessions regardless of
+  the 「记住本次」 toggle; local-only, never uploaded, bounded to 20000 characters.
 - **消息标记 (marks)** — click the 📌 on any message to mark it and jot an optional
   note. Marked messages show the pin + note inline, a **📌 N** chip in the toolbar
   toggles a **只看已标记** filter to review them, and — the point — they **compile
   into their own 【标记】 section** (each block = the whole message + its note),
   placed after the grouped material. Held in memory only, persisted with the
-  conversation solely when 「记住本次」 is on. (A separate pure-annotation "sticky
-  note" that never compiles is planned as its own feature.)
+  conversation solely when 「记住本次」 is on. (For a pure-annotation pad that never
+  compiles, see 便签 above.)
 - **在对话里定位** — every message in the reading list **and** every fragment in the
   workspace gets a crosshair button that scrolls the ChatGPT page to that message
   and flashes a ring around it. A **pure local scroll** — no request, nothing done

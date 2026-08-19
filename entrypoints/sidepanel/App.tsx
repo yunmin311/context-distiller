@@ -7,6 +7,7 @@ import { MessageList } from './components/MessageList';
 import { GroupBoard } from './components/GroupBoard';
 import { PresetBar } from './components/PresetBar';
 import { PreviewPanel } from './components/PreviewPanel';
+import { Scratchpad } from './components/Scratchpad';
 
 interface Toast {
   text: string;
@@ -46,6 +47,7 @@ export function App() {
   const { state, actions } = useDistiller();
   const [activeGroupId, setActiveGroupId] = useState(() => state.groups[0]?.id ?? '');
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [scratchpadOpen, setScratchpadOpen] = useState(false);
   const [toast, setToast] = useState<Toast | null>(null);
 
   useEffect(() => {
@@ -382,18 +384,33 @@ export function App() {
       </main>
 
       <footer className="app-footer">
+        {scratchpadOpen && (
+          <Scratchpad value={state.scratchpad} onCommit={actions.setScratchpad} />
+        )}
         <div className="footer-meta">
-          <label
-            className="remember-toggle"
-            title="打开后：本次对话与整理会存到本地，下次打开自动恢复；关闭即清除（默认关闭，不落盘）"
-          >
-            <input
-              type="checkbox"
-              checked={state.rememberSession}
-              onChange={(e) => actions.setRemember(e.target.checked)}
-            />
-            记住本次
-          </label>
+          <div className="footer-meta-left">
+            <label
+              className="remember-toggle"
+              title="打开后：本次对话与整理会存到本地，下次打开自动恢复；关闭即清除（默认关闭，不落盘）"
+            >
+              <input
+                type="checkbox"
+                checked={state.rememberSession}
+                onChange={(e) => actions.setRemember(e.target.checked)}
+              />
+              记住本次
+            </label>
+            <button
+              type="button"
+              className={`scratch-toggle${scratchpadOpen ? ' scratch-toggle-on' : ''}`}
+              title="便签：随手记的个人批注，只存本地、跨会话保留；永远不会编译进输出，也不发送"
+              aria-expanded={scratchpadOpen}
+              onClick={() => setScratchpadOpen((v) => !v)}
+            >
+              便签
+              {state.scratchpad.trim() !== '' && <span className="scratch-dot" aria-hidden />}
+            </button>
+          </div>
           <span className="muted tiny">
             {result.fragmentCount} 段 · {result.charCount} 字
           </span>

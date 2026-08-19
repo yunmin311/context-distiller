@@ -25,9 +25,18 @@ export interface Prefs {
   modules: string[];
   /** Long-term custom requirements. */
   extras: StoredExtra[];
+  /**
+   * 便签: the user's private annotation pad. Pure personal notes, kept long-term
+   * like a custom requirement — NEVER compiled into the output, never sent
+   * anywhere. Independent of 「记住本次」 (it's config, not conversation data).
+   */
+  scratchpad?: string;
 }
 
-const EMPTY: Prefs = { rememberSession: false, modules: [], extras: [] };
+const EMPTY: Prefs = { rememberSession: false, modules: [], extras: [], scratchpad: '' };
+
+/** Upper bound for the free-text 便签, so a corrupted / huge blob can't bloat storage. */
+const MAX_SCRATCHPAD = 20000;
 
 // Defensive caps: config could be corrupted (hand-edited storage, an older bug,
 // a pathological accumulation). Bound counts and lengths so a bad blob can never
@@ -62,6 +71,7 @@ export async function loadPrefs(): Promise<Prefs> {
             name: clampStr(e.name, 40) || text.trim().slice(0, 14) || '要求',
           };
         }),
+      scratchpad: clampStr(p?.scratchpad, MAX_SCRATCHPAD),
     };
   } catch {
     return EMPTY;

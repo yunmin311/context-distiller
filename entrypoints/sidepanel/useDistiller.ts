@@ -52,6 +52,12 @@ export interface DistillerState {
   marks: Record<string, string>;
   /** Opt-in: persist this session (conversation + material) and restore on reopen. */
   rememberSession: boolean;
+  /** 便签: private annotation pad — pure personal notes. NEVER compiled into the
+   *  output and never passed to compile(); persisted as long-term local config
+   *  (like a custom requirement), so it survives across sessions regardless of
+   *  「记住本次」. Deliberately kept out of `groups` / `selections` / `marks` so it
+   *  can never leak into the compiled prompt. */
+  scratchpad: string;
   /** True once long-term config has been loaded, so we don't save over it. */
   hydrated: boolean;
 }
@@ -86,6 +92,7 @@ function initialState(): DistillerState {
     customExtras: [],
     marks: {},
     rememberSession: false,
+    scratchpad: '',
     hydrated: false,
   };
 }
@@ -119,6 +126,7 @@ type Action =
   | { type: 'remove-mark'; messageId: string }
   | { type: 'hydrate-prefs'; prefs: Prefs; snapshot: SessionSnapshot | null }
   | { type: 'set-remember'; value: boolean }
+  | { type: 'set-scratchpad'; text: string }
   | { type: 'clear-material' };
 
 function mapGroup(
@@ -341,6 +349,9 @@ function reducer(state: DistillerState, action: Action): DistillerState {
         return {
           ...state,
           rememberSession: prefs.rememberSession,
+          // 便签 is long-term config, not part of the session snapshot — always
+          // restore it from prefs regardless of the remembered working set.
+          scratchpad: prefs.scratchpad ?? '',
           conversation: snapshot.conversation,
           messages: snapshot.messages,
           partial: snapshot.partial,
@@ -380,6 +391,7 @@ function reducer(state: DistillerState, action: Action): DistillerState {
       return {
         ...state,
         rememberSession: prefs.rememberSession,
+        scratchpad: prefs.scratchpad ?? '',
         groups: [...state.groups, ...restored],
         customExtras,
         hydrated: true,
@@ -388,6 +400,9 @@ function reducer(state: DistillerState, action: Action): DistillerState {
 
     case 'set-remember':
       return { ...state, rememberSession: action.value };
+
+    case 'set-scratchpad':
+      return { ...state, scratchpad: action.text };
 
     case 'clear-material':
       // Clear MATERIAL (fragments + marks + selections) — keep the module
@@ -435,12 +450,13 @@ export function useDistiller() {
       extras: state.customExtras
         .filter((e) => e.scope === 'persist')
         .map((e) => ({ id: e.id, name: e.name, text: e.text })),
+      scratchpad: state.scratchpad,
     };
     const signature = JSON.stringify(prefs);
     if (signature === lastSaved.current) return;
     lastSaved.current = signature;
     void savePrefs(prefs);
-  }, [state.groups, state.customExtras, state.hydrated, state.rememberSession]);
+  }, [state.groups, state.customExtras, state.hydrated, state.rememberSession, state.scratchpad]);
 
   // Opt-in session snapshot: while "记住本次整理" is on, mirror the working set
   // (conversation + material + selections) to storage so reopening restores it.
@@ -633,6 +649,8 @@ export function useDistiller() {
           void clearSession();
         }
       },
+      /** 便签: update the private annotation pad. Never compiled into the output. */
+      setScratchpad: (text: string) => dispatch({ type: 'set-scratchpad', text }),
     }),
     [loadConversation, retryWithReload, addMessageFragment, addSelection],
   );
