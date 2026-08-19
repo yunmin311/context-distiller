@@ -14,23 +14,6 @@ interface Toast {
   tone: 'ok' | 'warn' | 'error';
 }
 
-/**
- * Pull a borrowed accent toward grey (and toward the theme's ground) so it reads as
- * a quiet tint on frosted glass rather than a saturated block of paint. `amount`
- * is how far to mix toward the channel average: 0 keeps it, 1 makes it grey.
- */
-function desaturate(color: string, amount: number, theme: 'light' | 'dark'): string | null {
-  const m = color.match(/\d+(\.\d+)?/g);
-  if (!m || m.length < 3) return null;
-  const rgb = [Number(m[0]), Number(m[1]), Number(m[2])] as const;
-  const grey = (rgb[0] + rgb[1] + rgb[2]) / 3;
-  const mixed = rgb.map((c) => c + (grey - c) * amount);
-  // Nudge toward the theme's ground so it stays soft in both light and dark.
-  const ground = theme === 'dark' ? 210 : 96;
-  const out = mixed.map((c) => Math.round(c + (ground - c) * 0.18));
-  return `rgb(${out[0]}, ${out[1]}, ${out[2]})`;
-}
-
 /** A custom requirement's chip shows a short one-line label; the full text still
  *  compiles verbatim. Keeps a long paste from stretching the chip off-screen. */
 function chipLabel(text: string): string {
@@ -89,17 +72,11 @@ export function App() {
       root.setAttribute('data-theme', theme);
       // Borrow ChatGPT's accent for our own accent tokens when it exposes a real
       // (non-grey) one; otherwise clear them so the panel's neutral accent applies.
-      const toned = accent ? desaturate(accent, 0.55, theme) : null;
-      if (toned) {
-        root.style.setProperty('--accent', toned);
-        root.style.setProperty('--focus', toned);
-        root.style.setProperty('--sel', toned);
-        root.style.setProperty('--sel-ink', theme === 'dark' ? '#101014' : '#ffffff');
-      } else {
-        for (const k of ['--accent', '--focus', '--sel', '--sel-ink']) {
-          root.style.removeProperty(k);
-        }
-      }
+      // NOTE: only light/dark is synced. We deliberately do NOT borrow ChatGPT's
+      // accent color: its UI is monochrome, so "its accent" resolves to grey and
+      // tinted the whole panel a muddy neutral. The panel keeps its own celadon
+      // blue-grey accent (see styles.css), which is the product's identity.
+      void accent;
     };
     void sendToActiveTab({ kind: 'get-theme' }).then((res) => {
       if (alive && res.kind === 'theme') apply(res.theme, res.accent);

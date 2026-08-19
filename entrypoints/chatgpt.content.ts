@@ -440,12 +440,10 @@ function softenColor(color: string, amount: number): string | null {
 function flashElement(el: HTMLElement): void {
   const theme = detectChatgptTheme();
   const dark = theme === 'dark';
-  // Prefer ChatGPT's own accent, pulled toward grey so the ring is a soft tint
-  // rather than a saturated band; fall back to a monochrome ring in its theme.
-  const accent = detectChatgptAccent(theme);
-  const softened = accent ? softenColor(accent, 0.55) : null;
-  const ring = softened ?? (dark ? 'rgba(236, 236, 241, 0.72)' : 'rgba(32, 33, 38, 0.6)');
-  const glow = dark ? 'rgba(236, 236, 241, 0.14)' : 'rgba(32, 33, 38, 0.1)';
+  // The product's celadon blue-grey accent, matching the panel (ChatGPT's own UI
+  // is monochrome, so borrowing "its accent" would just yield grey).
+  const ring = dark ? 'rgba(143, 180, 198, 0.85)' : 'rgba(92, 129, 148, 0.85)';
+  const glow = dark ? 'rgba(143, 180, 198, 0.18)' : 'rgba(92, 129, 148, 0.14)';
   const prev = {
     outline: el.style.outline,
     offset: el.style.outlineOffset,
