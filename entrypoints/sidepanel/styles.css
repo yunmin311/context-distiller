@@ -473,6 +473,26 @@ textarea:focus,
   max-height: none;
   overflow: visible;
 }
+/* Collapsed preview: the whole thing is clickable to open. */
+.msg-body-clamped {
+  cursor: pointer;
+}
+/* 展开 / 收起 sits at the END of the text (inline), not by the number. */
+.msg-toggle {
+  margin-left: 6px;
+  padding: 0;
+  border: none;
+  background: none;
+  font-family: inherit;
+  font-size: 12px;
+  line-height: inherit;
+  color: var(--accent);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.msg-toggle:hover {
+  text-decoration: underline;
+}
 
 .tag {
   display: inline-grid;

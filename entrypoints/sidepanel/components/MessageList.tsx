@@ -77,11 +77,6 @@ const MessageRow = memo(function MessageRow({
       <header className="msg-head">
         <span className={`tag tag-${message.role}`}>{roleLabel(message.role)}</span>
         <span className="muted tiny">#{message.order + 1}</span>
-        {isLong && (
-          <button className="link-btn tiny" onClick={() => onToggle(message.id)}>
-            {open ? '收起' : '展开'}
-          </button>
-        )}
         <div className="spacer" />
         {canPair && !added && (
           <button
@@ -102,8 +97,34 @@ const MessageRow = memo(function MessageRow({
           </button>
         )}
       </header>
-      <div className={`msg-body ${open ? 'msg-body-open' : ''}`} data-body>
+      <div
+        className={`msg-body ${open ? 'msg-body-open' : ''}${
+          isLong && !open ? ' msg-body-clamped' : ''
+        }`}
+        data-body
+        onClick={
+          isLong && !open
+            ? () => {
+                // Tap the preview to open it — but don't hijack a text selection
+                // (a drag-to-select also ends in a click).
+                if (window.getSelection()?.toString().trim()) return;
+                onToggle(message.id);
+              }
+            : undefined
+        }
+      >
         {shown}
+        {isLong && (
+          <button
+            className="msg-toggle"
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggle(message.id);
+            }}
+          >
+            {open ? '收起' : '展开'}
+          </button>
+        )}
       </div>
     </article>
   );
