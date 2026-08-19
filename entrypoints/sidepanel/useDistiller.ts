@@ -47,6 +47,9 @@ export interface DistillerState {
   selections: PromptSelections;
   /** User-defined requirements (session + long-term), appended after built-ins. */
   customExtras: PresetOption[];
+  /** Reading marks (读时标记): messageId → note. A pure reading aid — NEVER
+   *  compiled into the output. Persisted only when rememberSession is on. */
+  marks: Record<string, string>;
   /** Opt-in: persist this session (conversation + material) and restore on reopen. */
   rememberSession: boolean;
   /** True once long-term config has been loaded, so we don't save over it. */
@@ -81,6 +84,7 @@ function initialState(): DistillerState {
     groups: createDefaultGroups(),
     selections: emptySelections(),
     customExtras: [],
+    marks: {},
     rememberSession: false,
     hydrated: false,
   };
@@ -110,6 +114,9 @@ type Action =
   | { type: 'add-custom-extra'; option: PresetOption }
   | { type: 'update-custom-extra'; id: string; name: string; text: string }
   | { type: 'remove-custom-extra'; id: string }
+  | { type: 'toggle-mark'; messageId: string }
+  | { type: 'set-mark'; messageId: string; note: string }
+  | { type: 'remove-mark'; messageId: string }
   | { type: 'hydrate-prefs'; prefs: Prefs; snapshot: SessionSnapshot | null }
   | { type: 'set-remember'; value: boolean }
   | { type: 'clear-material' };
@@ -127,7 +134,15 @@ function reducer(state: DistillerState, action: Action): DistillerState {
     case 'load-start':
       return { ...state, status: 'loading', error: undefined };
 
-    case 'load-success':
+    case 'load-success': {
+      // Keep only marks whose message is still in the freshly read conversation —
+      // a same-conversation refresh keeps its marks; switching conversations drops
+      // stale ones so the 已标记 count never counts another thread's messages.
+      const ids = new Set(action.messages.map((m) => m.id));
+      const marks: Record<string, string> = {};
+      for (const [id, note] of Object.entries(state.marks)) {
+        if (ids.has(id)) marks[id] = note;
+      }
       return {
         ...state,
         status: 'ready',
@@ -136,7 +151,9 @@ function reducer(state: DistillerState, action: Action): DistillerState {
         messages: action.messages,
         partial: action.partial,
         source: action.source,
+        marks,
       };
+    }
 
     case 'load-error':
       return { ...state, status: 'error', error: action.error };
@@ -298,6 +315,25 @@ function reducer(state: DistillerState, action: Action): DistillerState {
         },
       };
 
+    case 'toggle-mark': {
+      if (action.messageId in state.marks) {
+        const next = { ...state.marks };
+        delete next[action.messageId];
+        return { ...state, marks: next };
+      }
+      return { ...state, marks: { ...state.marks, [action.messageId]: '' } };
+    }
+
+    case 'set-mark':
+      return { ...state, marks: { ...state.marks, [action.messageId]: action.note } };
+
+    case 'remove-mark': {
+      if (!(action.messageId in state.marks)) return state;
+      const next = { ...state.marks };
+      delete next[action.messageId];
+      return { ...state, marks: next };
+    }
+
     case 'hydrate-prefs': {
       const { prefs, snapshot } = action;
       // Opt-in full restore: use the saved working set verbatim ("原样恢复").
@@ -313,6 +349,7 @@ function reducer(state: DistillerState, action: Action): DistillerState {
           groups: snapshot.groups.length > 0 ? snapshot.groups : state.groups,
           selections: snapshot.selections,
           customExtras: snapshot.customExtras,
+          marks: snapshot.marks ?? {},
           hydrated: true,
         };
       }
@@ -422,6 +459,7 @@ export function useDistiller() {
         groups: state.groups,
         selections: state.selections,
         customExtras: state.customExtras,
+        marks: state.marks,
       };
       const signature = JSON.stringify(snapshot);
       if (signature === lastSession.current) return;
@@ -441,6 +479,7 @@ export function useDistiller() {
     state.groups,
     state.selections,
     state.customExtras,
+    state.marks,
   ]);
 
   /** Outcome of a load, returned so the caller can show a transient hint. */
@@ -577,6 +616,11 @@ export function useDistiller() {
       updateCustomExtra: (id: string, name: string, text: string) =>
         dispatch({ type: 'update-custom-extra', id, name, text }),
       removeCustomExtra: (id: string) => dispatch({ type: 'remove-custom-extra', id }),
+      /** 读时标记: toggle a message's mark, edit its note, or remove it. Never compiled. */
+      toggleMark: (messageId: string) => dispatch({ type: 'toggle-mark', messageId }),
+      setMarkNote: (messageId: string, note: string) =>
+        dispatch({ type: 'set-mark', messageId, note }),
+      removeMark: (messageId: string) => dispatch({ type: 'remove-mark', messageId }),
       clearMaterial: () => dispatch({ type: 'clear-material' }),
       reset: () => dispatch({ type: 'reset' }),
       /** Toggle opt-in session persistence; turning it off purges the snapshot. */

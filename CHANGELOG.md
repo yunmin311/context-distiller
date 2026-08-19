@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **读时标记 (reading marks)** — a lightweight annotation layer inspired by
+  Superpower ChatGPT's notes, kept deliberately minimal. Click the 📌 on any
+  message to mark it and jot an optional note; marked messages show the pin + note
+  inline, and a **📌 N** chip in the toolbar toggles a **只看已标记** filter to
+  review them. Marks are a pure **reading aid — never compiled into the output** —
+  and are kept in memory only, persisted with the conversation solely when
+  「记住本次」 is on.
 - **Prompt library** — a built-in, **offline** set of ready-made "requirement"
   prompts (总结提炼 / 分析审视 / 改写润色 / 结构化 / 迁移交接) you can pull into a
   custom requirement via **从库导入**, then rename / trim / keep. Several entries

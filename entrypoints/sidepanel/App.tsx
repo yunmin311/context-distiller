@@ -287,6 +287,7 @@ export function App() {
                 messages={state.messages}
                 addedIds={addedIds}
                 pairableIds={pairableIds}
+                marks={state.marks}
                 groups={state.groups}
                 activeGroupId={activeGroupId}
                 onSetActive={setActiveGroupId}
@@ -294,6 +295,9 @@ export function App() {
                 onAdd={handleAddMessage}
                 onAddPair={addPair}
                 onAddSelection={handleAddSelection}
+                onToggleMark={actions.toggleMark}
+                onSetMarkNote={actions.setMarkNote}
+                onRemoveMark={actions.removeMark}
               />
             </section>
 

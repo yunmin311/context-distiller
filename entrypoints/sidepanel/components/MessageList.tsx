@@ -9,6 +9,8 @@ interface MessageListProps {
   addedIds: Set<string>;
   /** Ids of user turns whose next turn is an assistant reply (drives ＋问答). */
   pairableIds: Set<string>;
+  /** Reading marks: messageId → note. A reading aid, never compiled. */
+  marks: Record<string, string>;
   groups: FragmentGroup[];
   activeGroupId: string;
   onSetActive: (groupId: string) => void;
@@ -16,6 +18,9 @@ interface MessageListProps {
   onAdd: (message: ConversationMessage) => void;
   onAddPair: (message: ConversationMessage) => void;
   onAddSelection: (payload: SelectionInput) => void;
+  onToggleMark: (id: string) => void;
+  onSetMarkNote: (id: string, note: string) => void;
+  onRemoveMark: (id: string) => void;
 }
 
 const NEW_MODULE = '__new__';
@@ -43,9 +48,15 @@ interface MessageRowProps {
   canPair: boolean;
   /** Highlighted because the ChatGPT page is currently scrolled to this message. */
   isActive: boolean;
+  /** 读时标记 state for this row (a reading aid, never compiled). */
+  marked: boolean;
+  markNote: string;
   onToggle: (id: string) => void;
   onAdd: (message: ConversationMessage) => void;
   onAddPair: (message: ConversationMessage) => void;
+  onToggleMark: (id: string) => void;
+  onSetMarkNote: (id: string, note: string) => void;
+  onRemoveMark: (id: string) => void;
 }
 
 /**
@@ -61,15 +72,31 @@ const MessageRow = memo(function MessageRow({
   added,
   canPair,
   isActive,
+  marked,
+  markNote,
   onToggle,
   onAdd,
   onAddPair,
+  onToggleMark,
+  onSetMarkNote,
+  onRemoveMark,
 }: MessageRowProps) {
   const isLong = readable.length > CLAMP_CHARS;
   const shown = isLong && !open ? readable.slice(0, CLAMP_CHARS).trimEnd() + '…' : readable;
+
+  // Local draft for the mark note so typing doesn't dispatch on every keystroke
+  // (commit on blur / Enter). Resync if the note changes from outside (restore).
+  const [noteDraft, setNoteDraft] = useState(markNote);
+  useEffect(() => setNoteDraft(markNote), [markNote]);
+  const commitNote = () => {
+    if (noteDraft !== markNote) onSetMarkNote(message.id, noteDraft);
+  };
+
   return (
     <article
-      className={`msg msg-${message.role}${isActive ? ' msg-active' : ''}`}
+      className={`msg msg-${message.role}${isActive ? ' msg-active' : ''}${
+        marked ? ' msg-marked' : ''
+      }`}
       data-mid={message.id}
       data-role={message.role}
       data-order={message.order}
@@ -78,6 +105,15 @@ const MessageRow = memo(function MessageRow({
         <span className={`tag tag-${message.role}`}>{roleLabel(message.role)}</span>
         <span className="muted tiny">#{message.order + 1}</span>
         <div className="spacer" />
+        <button
+          className={`mark-btn${marked ? ' mark-btn-on' : ''}`}
+          title={marked ? '取消标记' : '标记这条（只帮读，不进输出）'}
+          aria-pressed={marked}
+          aria-label={marked ? '取消标记' : '标记这条'}
+          onClick={() => onToggleMark(message.id)}
+        >
+          📌
+        </button>
         {canPair && !added && (
           <button
             className="chip-btn tiny"
@@ -134,6 +170,35 @@ const MessageRow = memo(function MessageRow({
           </button>
         )}
       </div>
+      {marked && (
+        <div className="msg-note">
+          <span className="msg-note-pin" aria-hidden>
+            📌
+          </span>
+          <input
+            className="msg-note-input"
+            placeholder="标记备注（可选）"
+            value={noteDraft}
+            onChange={(e) => setNoteDraft(e.target.value)}
+            onBlur={commitNote}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') e.currentTarget.blur();
+              if (e.key === 'Escape') {
+                setNoteDraft(markNote);
+                e.currentTarget.blur();
+              }
+            }}
+          />
+          <button
+            className="msg-note-x"
+            title="取消标记"
+            aria-label="取消标记"
+            onClick={() => onRemoveMark(message.id)}
+          >
+            ✕
+          </button>
+        </div>
+      )}
     </article>
   );
 });
@@ -142,6 +207,7 @@ export function MessageList({
   messages,
   addedIds,
   pairableIds,
+  marks,
   groups,
   activeGroupId,
   onSetActive,
@@ -149,8 +215,12 @@ export function MessageList({
   onAdd,
   onAddPair,
   onAddSelection,
+  onToggleMark,
+  onSetMarkNote,
+  onRemoveMark,
 }: MessageListProps) {
   const [filter, setFilter] = useState('');
+  const [onlyMarked, setOnlyMarked] = useState(false);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [popover, setPopover] = useState<Popover | null>(null);
   const [selNote, setSelNote] = useState('');
@@ -183,11 +253,23 @@ export function MessageList({
     setCreating(false);
   }
 
+  const markCount = useMemo(() => {
+    const ids = new Set(messages.map((m) => m.id));
+    return Object.keys(marks).filter((id) => ids.has(id)).length;
+  }, [messages, marks]);
+
   const filtered = useMemo(() => {
     const q = filter.trim().toLowerCase();
-    if (!q) return messages;
-    return messages.filter((m) => m.text.toLowerCase().includes(q));
-  }, [messages, filter]);
+    let list = q ? messages.filter((m) => m.text.toLowerCase().includes(q)) : messages;
+    if (onlyMarked) list = list.filter((m) => m.id in marks);
+    return list;
+  }, [messages, filter, onlyMarked, marks]);
+
+  // If the last mark is removed while 只看已标记 is on, fall back to showing
+  // everything so the list can't get stuck empty with no chip left to toggle off.
+  useEffect(() => {
+    if (onlyMarked && markCount === 0) setOnlyMarked(false);
+  }, [onlyMarked, markCount]);
 
   // De-Markdown each message once per load, not on every keystroke/re-render.
   const readables = useMemo(
@@ -301,6 +383,16 @@ export function MessageList({
         <span className="muted tiny">
           {filtered.length}/{messages.length}
         </span>
+        {markCount > 0 && (
+          <button
+            className={`mark-filter${onlyMarked ? ' mark-filter-on' : ''}`}
+            onClick={() => setOnlyMarked((v) => !v)}
+            title={onlyMarked ? '显示全部消息' : '只看已标记的消息'}
+            aria-pressed={onlyMarked}
+          >
+            📌 {markCount}
+          </button>
+        )}
       </div>
 
       {creating && (
@@ -363,14 +455,21 @@ export function MessageList({
           added={addedIds.has(message.id)}
           canPair={pairableIds.has(message.id)}
           isActive={message.id === activeId}
+          marked={message.id in marks}
+          markNote={marks[message.id] ?? ''}
           onToggle={toggle}
           onAdd={onAdd}
           onAddPair={onAddPair}
+          onToggleMark={onToggleMark}
+          onSetMarkNote={onSetMarkNote}
+          onRemoveMark={onRemoveMark}
         />
       ))}
 
       {messages.length > 0 && filtered.length === 0 && (
-        <p className="muted tiny">没有匹配「{filter}」的消息。</p>
+        <p className="muted tiny">
+          {onlyMarked ? '没有匹配的已标记消息。' : `没有匹配「${filter}」的消息。`}
+        </p>
       )}
 
       {popover && (

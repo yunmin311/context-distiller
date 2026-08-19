@@ -494,6 +494,92 @@ textarea:focus,
   text-decoration: underline;
 }
 
+/* 读时标记 (reading marks) — a reading aid, never compiled into the output. */
+.mark-btn {
+  padding: 0 2px;
+  border: none;
+  background: none;
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+  /* Faint + desaturated until this row is marked or hovered, so an unmarked
+     conversation stays visually quiet. */
+  opacity: 0.32;
+  filter: grayscale(1);
+  transition: opacity 0.12s ease, filter 0.12s ease;
+}
+.mark-btn:hover {
+  opacity: 0.7;
+  filter: grayscale(0.3);
+}
+.mark-btn-on {
+  opacity: 1;
+  filter: none;
+}
+.msg-note {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  padding: 4px 8px;
+  border-radius: calc(var(--radius) - 2px);
+  background: var(--accent-weak);
+}
+.msg-note-pin {
+  font-size: 11px;
+  line-height: 1;
+}
+.msg-note-input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: none;
+  font-family: inherit;
+  font-size: 12px;
+  color: var(--ink);
+  padding: 2px 0;
+}
+.msg-note-input:focus {
+  outline: none;
+}
+.msg-note-input::placeholder {
+  color: var(--muted);
+}
+.msg-note-x {
+  border: none;
+  background: none;
+  color: var(--muted);
+  font-size: 11px;
+  cursor: pointer;
+  padding: 0 2px;
+}
+.msg-note-x:hover {
+  color: var(--danger);
+}
+.mark-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 7px;
+  border: 1px solid var(--line-2);
+  border-radius: 999px;
+  background: none;
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 11px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.mark-filter:hover {
+  color: var(--ink);
+  border-color: var(--ink-2);
+}
+.mark-filter-on {
+  background: var(--sel);
+  color: var(--sel-ink);
+  border-color: transparent;
+}
+
 .tag {
   display: inline-grid;
   place-items: center;

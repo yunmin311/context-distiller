@@ -30,6 +30,8 @@ export interface SessionSnapshot {
   groups: FragmentGroup[];
   selections: PromptSelections;
   customExtras: PresetOption[];
+  /** Reading marks: messageId → note (note may be empty). Optional for back-compat. */
+  marks?: Record<string, string>;
 }
 
 export async function loadSession(): Promise<SessionSnapshot | null> {
