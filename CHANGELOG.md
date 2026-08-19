@@ -41,11 +41,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   tint rather than saturated paint. Greyscale is rejected as an accent (ChatGPT's
   primary button is monochrome), in which case the panel keeps its own neutral
   accent; the OS preference still applies when the page can't be read.
-- **Frosted-glass surfaces** — the primary / secondary buttons, selected preset
-  chips, the highlight-to-add bar and the toast are now translucent, backdrop-
-  blurred material with a hairline edge (Apple-style, in the spirit of ChatGPT's
-  scroll-to-bottom button) instead of solid slabs of accent. Browsers without
-  `color-mix` fall back to untinted glass.
+- **Frosted-glass action bar** — the footer is now pinned **over** the message list
+  with a translucent ground and a real backdrop blur, so messages scroll softly
+  visible beneath it (Apple-style, in the spirit of ChatGPT's scroll-to-bottom
+  button); the highlight-to-add bar and the toast get the same treatment. Glass is
+  used **only** where a surface genuinely floats above scrolling content —
+  `backdrop-filter` on an element sitting on the panel's opaque background has
+  nothing to see through and degrades into a flat grey block, which is what an
+  earlier pass mistakenly shipped on buttons and chips. Those are now a solid
+  accent pill (primary) and soft accent washes (selected chips). Falls back to the
+  plain opaque bar where blur isn't supported.
 - **Prompt library** — a built-in, **offline** set of ready-made "requirement"
   prompts (总结提炼 / 分析审视 / 改写润色 / 结构化 / 迁移交接) you can pull into a
   custom requirement via **从库导入**, then rename / trim / keep. Several entries
@@ -64,6 +69,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   on the message you just closed instead of stranding you far down the list.
 
 ### Fixed
+- **Reading no longer needs a second try.** The first read fires as the panel
+  opens, which could land before the page's content script was listening (or
+  before ChatGPT had rendered the conversation) — it failed quietly and you had to
+  click 读取 again. A failed read now **retries up to three times with a short
+  backoff** before reporting anything.
 - **Long-conversation full read is much more reliable.** A transient hiccup on the
   session or conversation request (a 429 rate-limit, a 5xx, a network blip — or a
   *hung* socket) used to drop the whole read to the partial DOM path, the one that

@@ -123,7 +123,15 @@ export function App() {
   // returns to the intro rather than throwing up an error screen.
   const handleLoad = useCallback(
     async (silent = false) => {
-      const res = await actions.loadConversation();
+      let res = await actions.loadConversation();
+      // The first read right after the panel opens often lands before the page's
+      // content script is listening (or before ChatGPT has rendered a conversation),
+      // which is why it used to take a second click. Retry a couple of times with a
+      // short backoff before reporting anything.
+      for (let attempt = 0; !res.ok && attempt < 3; attempt += 1) {
+        await new Promise<void>((r) => setTimeout(r, 500 + attempt * 500));
+        res = await actions.loadConversation();
+      }
       if (res.ok) {
         setToast({
           text: res.partial
