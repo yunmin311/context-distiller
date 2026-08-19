@@ -119,7 +119,15 @@ const MessageRow = memo(function MessageRow({
             className="msg-toggle"
             onClick={(e) => {
               e.stopPropagation();
+              const collapsing = open;
+              const article = (e.currentTarget as HTMLElement).closest('.msg');
               onToggle(message.id);
+              // 收起 shrinks the body above this button, which would otherwise
+              // strand the reader far below the message. Bring the row back into
+              // view so you land on the message you just collapsed, not down-list.
+              if (collapsing && article) {
+                requestAnimationFrame(() => article.scrollIntoView({ block: 'nearest' }));
+              }
             }}
           >
             {open ? '收起' : '展开'}

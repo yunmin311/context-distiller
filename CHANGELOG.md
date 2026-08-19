@@ -22,7 +22,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The message **展开 / 收起** toggle moved from beside the #N number to the **end of
   the message text** (inline), and the collapsed preview is now **tap-anywhere-to-
   open** — while a real text selection (drag-to-select for add-fragment) is left
-  untouched.
+  untouched. Collapsing now **scrolls the message back into view**, so 收起 lands you
+  on the message you just closed instead of stranding you far down the list.
 
 ## [0.5.0] — 2026-08-12
 
