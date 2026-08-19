@@ -32,8 +32,12 @@
   --mono: ui-monospace, 'Cascadia Code', 'SFMono-Regular', Consolas, 'PingFang SC', monospace;
 }
 
+/* Dark palette, defined once as a custom-property block we apply in two ways:
+   — by OS preference, UNLESS the panel has been explicitly synced to ChatGPT light;
+   — by explicit sync to ChatGPT dark (data-theme="dark"), which wins over the OS.
+   The panel sets data-theme from ChatGPT's own theme (see App's theme sync). */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme='light']) {
     --bg: #1c1c1c;
     --panel: #131314;
     --surface: #242426;
@@ -53,6 +57,26 @@
     --danger: #f26b60;
     --shadow-pop: 0 6px 22px rgba(0, 0, 0, 0.55);
   }
+}
+:root[data-theme='dark'] {
+  --bg: #1c1c1c;
+  --panel: #131314;
+  --surface: #242426;
+  --hover: #2e2e31;
+  --sunken: #1f1f22;
+  --ink: #f2f2f3;
+  --ink-2: #cfcfd4;
+  --muted: #9d9da6;
+  --faint: #67676f;
+  --line: #2b2b2e;
+  --line-2: #3a3a3e;
+  --accent: #9a9aa2;
+  --accent-weak: rgba(255, 255, 255, 0.06);
+  --focus: #a1a1aa;
+  --sel: #eaeaee;
+  --sel-ink: #18181b;
+  --danger: #f26b60;
+  --shadow-pop: 0 6px 22px rgba(0, 0, 0, 0.55);
 }
 
 * {

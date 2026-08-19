@@ -11,6 +11,7 @@ import {
   type MwRequest,
   type MwResponse,
   type ActiveMessagePush,
+  type ThemePush,
 } from '../lib/messaging/protocol';
 
 /**
@@ -50,8 +51,40 @@ export default defineContentScript({
     }
 
     setupFollow(ctx);
+    setupThemeSync(ctx);
   },
 });
+
+/**
+ * Tell the panel ChatGPT's light/dark theme whenever it changes, so the panel can
+ * follow it. ChatGPT toggles theme by changing a class / attribute on <html>, so
+ * we watch that. Lifecycle-safe like setupFollow: the observer is disconnected on
+ * context invalidation, and the send is guarded.
+ */
+function setupThemeSync(ctx: {
+  isInvalid: boolean;
+  onInvalidated: (cb: () => void) => void;
+}): void {
+  let last = detectChatgptTheme();
+  const push = () => {
+    if (ctx.isInvalid) return;
+    const theme = detectChatgptTheme();
+    if (theme === last) return;
+    last = theme;
+    const msg: ThemePush = { kind: 'theme-change', theme };
+    try {
+      void browser.runtime.sendMessage(msg).catch(() => {});
+    } catch {
+      // context gone between the check and the send — ignore
+    }
+  };
+  const observer = new MutationObserver(push);
+  observer.observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: ['class', 'style', 'data-theme'],
+  });
+  ctx.onInvalidated(() => observer.disconnect());
+}
 
 /**
  * "Follow" — as the user scrolls / uses ChatGPT's right-side jump, tell the panel
@@ -178,6 +211,8 @@ async function handle(message: PanelRequest): Promise<PanelResponse> {
     }
     case 'scroll-to-message':
       return scrollToMessage(message.messageId, message.orderedIds);
+    case 'get-theme':
+      return { kind: 'theme', theme: detectChatgptTheme() };
     default:
       return { kind: 'error', error: '未知请求' };
   }
@@ -267,7 +302,8 @@ async function getConversation(): Promise<PanelResponse> {
  * mounts. If it still can't be found, we say so instead of guessing.
  */
 async function scrollToMessage(messageId: string, orderedIds?: string[]): Promise<PanelResponse> {
-  let el = document.querySelector<HTMLElement>(`[data-message-id="${CSS.escape(messageId)}"]`);
+  const sel = `[data-message-id="${CSS.escape(messageId)}"]`;
+  let el = document.querySelector<HTMLElement>(sel);
   if (!el && orderedIds && orderedIds.length > 0) {
     el = await seekToMessage(messageId, orderedIds);
   }
@@ -275,27 +311,60 @@ async function scrollToMessage(messageId: string, orderedIds?: string[]): Promis
     return { kind: 'scroll-result', ok: false, error: '这条当前找不到（可能刚被折叠/虚拟化），刷新页面后再试。' };
   }
   el.scrollIntoView({ block: 'center', behavior: 'smooth' });
-  flashElement(el);
+  // Virtualization re-lays-out around the new position, which can nudge the target
+  // off-center; re-center once it settles, then flash whatever's there now.
+  const target = el;
+  window.setTimeout(() => {
+    const settled = document.querySelector<HTMLElement>(sel) ?? target;
+    settled.scrollIntoView({ block: 'center', behavior: 'auto' });
+    flashElement(settled);
+  }, 320);
   return { kind: 'scroll-result', ok: true };
 }
 
-/** Non-layout highlight (outline ring), restored after a moment. Saves/restores
- *  the inline styles we touch so ChatGPT's own styling is left intact. */
+/**
+ * Detect ChatGPT's current light/dark theme. Prefers its own `dark`/`light` class
+ * on <html>; falls back to the page background's luminance so a class rename can't
+ * break it. Used to tint the locate highlight and to sync the panel's theme.
+ */
+function detectChatgptTheme(): 'light' | 'dark' {
+  const root = document.documentElement;
+  if (root.classList.contains('dark')) return 'dark';
+  if (root.classList.contains('light')) return 'light';
+  const bg =
+    getComputedStyle(document.body).backgroundColor || getComputedStyle(root).backgroundColor;
+  const m = bg.match(/\d+(\.\d+)?/g);
+  if (m && m.length >= 3) {
+    const lum = 0.2126 * Number(m[0]) + 0.7152 * Number(m[1]) + 0.0722 * Number(m[2]);
+    return lum < 128 ? 'dark' : 'light';
+  }
+  return 'light';
+}
+
+/** Non-layout highlight (outline ring + soft glow), restored after a moment.
+ *  Monochrome and tinted to ChatGPT's OWN theme, so it reads as native instead of
+ *  a clashing accent. Saves/restores the inline styles we touch. */
 function flashElement(el: HTMLElement): void {
+  const dark = detectChatgptTheme() === 'dark';
+  const ring = dark ? 'rgba(236, 236, 241, 0.72)' : 'rgba(32, 33, 38, 0.6)';
+  const glow = dark ? 'rgba(236, 236, 241, 0.14)' : 'rgba(32, 33, 38, 0.1)';
   const prev = {
     outline: el.style.outline,
     offset: el.style.outlineOffset,
     radius: el.style.borderRadius,
+    shadow: el.style.boxShadow,
     transition: el.style.transition,
   };
-  el.style.transition = 'outline-color 0.25s ease';
-  el.style.outline = '2px solid rgba(56, 132, 122, 0.9)';
+  el.style.transition = 'outline-color 0.25s ease, box-shadow 0.25s ease';
+  el.style.outline = `2px solid ${ring}`;
   el.style.outlineOffset = '3px';
   el.style.borderRadius = '10px';
+  el.style.boxShadow = `0 0 0 5px ${glow}`;
   window.setTimeout(() => {
     el.style.outline = prev.outline;
     el.style.outlineOffset = prev.offset;
     el.style.borderRadius = prev.radius;
+    el.style.boxShadow = prev.shadow;
     el.style.transition = prev.transition;
   }, 1600);
 }
@@ -304,11 +373,20 @@ function flashElement(el: HTMLElement): void {
 function findScrollContainer(): HTMLElement {
   const anyMsg = document.querySelector<HTMLElement>('[data-message-author-role]');
   let el: HTMLElement | null = anyMsg?.parentElement ?? null;
+  // Pick the ancestor with the LARGEST scrollable range — the real conversation
+  // scroller, not the first nested element that merely allows overflow.
+  let best: HTMLElement | null = null;
+  let bestRange = 0;
   while (el && el !== document.body) {
     const oy = getComputedStyle(el).overflowY;
-    if ((oy === 'auto' || oy === 'scroll') && el.scrollHeight > el.clientHeight + 60) return el;
+    const range = el.scrollHeight - el.clientHeight;
+    if ((oy === 'auto' || oy === 'scroll') && range > bestRange) {
+      best = el;
+      bestRange = range;
+    }
     el = el.parentElement;
   }
+  if (best && bestRange > 60) return best;
   return (document.scrollingElement as HTMLElement) ?? document.documentElement;
 }
 
@@ -331,9 +409,9 @@ async function seekToMessage(messageId: string, orderedIds: string[]): Promise<H
   // First guess: proportional to the message's position in the thread.
   let top = (targetOrder / Math.max(1, orderedIds.length - 1)) * hi;
 
-  for (let attempt = 0; attempt < 16; attempt += 1) {
+  for (let attempt = 0; attempt < 24; attempt += 1) {
     container.scrollTo({ top, behavior: 'auto' });
-    await wait(300);
+    await wait(350);
 
     const hit = document.querySelector<HTMLElement>(sel);
     if (hit) return hit;

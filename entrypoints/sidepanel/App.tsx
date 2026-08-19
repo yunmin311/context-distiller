@@ -62,6 +62,29 @@ export function App() {
     return () => clearTimeout(timer);
   }, [toast]);
 
+  // Sync the panel's light/dark theme to ChatGPT's own, so it feels native even
+  // when ChatGPT's theme differs from the OS preference. Query once on open, then
+  // follow the live changes the content script pushes.
+  useEffect(() => {
+    let alive = true;
+    const apply = (theme: 'light' | 'dark') => {
+      document.documentElement.setAttribute('data-theme', theme);
+    };
+    void sendToActiveTab({ kind: 'get-theme' }).then((res) => {
+      if (alive && res.kind === 'theme') apply(res.theme);
+    });
+    const onMsg = (msg: unknown): undefined => {
+      const m = msg as { kind?: string; theme?: 'light' | 'dark' } | undefined;
+      if (m?.kind === 'theme-change' && m.theme) apply(m.theme);
+      return undefined;
+    };
+    browser.runtime.onMessage.addListener(onMsg);
+    return () => {
+      alive = false;
+      browser.runtime.onMessage.removeListener(onMsg);
+    };
+  }, []);
+
   // Read the conversation, then flash a brief status toast instead of keeping a
   // permanent banner. On a silent auto-read (panel just opened) a failure quietly
   // returns to the intro rather than throwing up an error screen.

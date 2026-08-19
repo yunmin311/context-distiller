@@ -15,6 +15,7 @@ export type PanelRequest =
   | { kind: 'get-conversation' }
   | { kind: 'get-selection' }
   | { kind: 'fill-composer'; text: string }
+  | { kind: 'get-theme' }
   | {
       kind: 'scroll-to-message';
       messageId: string;
@@ -47,6 +48,7 @@ export type PanelResponse =
   | { kind: 'selection'; ok: false; error: string }
   | { kind: 'fill'; ok: boolean; error?: string }
   | { kind: 'scroll-result'; ok: boolean; error?: string }
+  | { kind: 'theme'; theme: 'light' | 'dark' }
   | { kind: 'error'; error: string };
 
 // --- Content Script  ->  Side Panel (push, chrome.runtime.sendMessage) -----
@@ -59,6 +61,12 @@ export type PanelResponse =
 export interface ActiveMessagePush {
   kind: 'active-message';
   messageId: string;
+}
+
+/** Pushed when ChatGPT's light/dark theme changes, so the panel can follow it. */
+export interface ThemePush {
+  kind: 'theme-change';
+  theme: 'light' | 'dark';
 }
 
 // --- Content Script  <->  Main World Bridge (window CustomEvent) ----------
