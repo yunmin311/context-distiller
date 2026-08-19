@@ -33,10 +33,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   The highlight ring is now **monochrome and tinted to ChatGPT's own light/dark
   theme** (no fixed accent), and it settles the target back to center after
   ChatGPT re-lays-out.
-- **主题跟随 ChatGPT** — the panel now mirrors ChatGPT's own light/dark theme (read
-  from the page and followed live), so it matches even when ChatGPT's theme differs
-  from the OS preference. Falls back to the OS preference when the page's theme
-  can't be read.
+- **主题跟随 ChatGPT** — the panel now mirrors ChatGPT's own light/dark theme **and
+  borrows its accent color** (read from ChatGPT's own CSS custom properties, else
+  its send button), so buttons, selected chips and focus rings match the page it
+  sits beside. Read on open and followed live. Greyscale is rejected as an accent
+  (ChatGPT's primary button is monochrome), in which case the panel keeps its own
+  neutral accent; the OS preference still applies when the page can't be read.
 - **Prompt library** — a built-in, **offline** set of ready-made "requirement"
   prompts (总结提炼 / 分析审视 / 改写润色 / 结构化 / 迁移交接) you can pull into a
   custom requirement via **从库导入**, then rename / trim / keep. Several entries

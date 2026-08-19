@@ -67,15 +67,30 @@ export function App() {
   // follow the live changes the content script pushes.
   useEffect(() => {
     let alive = true;
-    const apply = (theme: 'light' | 'dark') => {
-      document.documentElement.setAttribute('data-theme', theme);
+    const apply = (theme: 'light' | 'dark', accent?: string | null) => {
+      const root = document.documentElement;
+      root.setAttribute('data-theme', theme);
+      // Borrow ChatGPT's accent for our own accent tokens when it exposes a real
+      // (non-grey) one; otherwise clear them so the panel's neutral accent applies.
+      if (accent) {
+        root.style.setProperty('--accent', accent);
+        root.style.setProperty('--focus', accent);
+        root.style.setProperty('--sel', accent);
+        root.style.setProperty('--sel-ink', theme === 'dark' ? '#101014' : '#ffffff');
+      } else {
+        for (const k of ['--accent', '--focus', '--sel', '--sel-ink']) {
+          root.style.removeProperty(k);
+        }
+      }
     };
     void sendToActiveTab({ kind: 'get-theme' }).then((res) => {
-      if (alive && res.kind === 'theme') apply(res.theme);
+      if (alive && res.kind === 'theme') apply(res.theme, res.accent);
     });
     const onMsg = (msg: unknown): undefined => {
-      const m = msg as { kind?: string; theme?: 'light' | 'dark' } | undefined;
-      if (m?.kind === 'theme-change' && m.theme) apply(m.theme);
+      const m = msg as
+        | { kind?: string; theme?: 'light' | 'dark'; accent?: string | null }
+        | undefined;
+      if (m?.kind === 'theme-change' && m.theme) apply(m.theme, m.accent);
       return undefined;
     };
     browser.runtime.onMessage.addListener(onMsg);

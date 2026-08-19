@@ -48,7 +48,13 @@ export type PanelResponse =
   | { kind: 'selection'; ok: false; error: string }
   | { kind: 'fill'; ok: boolean; error?: string }
   | { kind: 'scroll-result'; ok: boolean; error?: string }
-  | { kind: 'theme'; theme: 'light' | 'dark' }
+  | {
+      kind: 'theme';
+      theme: 'light' | 'dark';
+      /** ChatGPT's own accent / primary color, when the page exposes a non-grey
+       *  one; null when its buttons are monochrome (panel keeps its own accent). */
+      accent?: string | null;
+    }
   | { kind: 'error'; error: string };
 
 // --- Content Script  ->  Side Panel (push, chrome.runtime.sendMessage) -----
@@ -63,10 +69,12 @@ export interface ActiveMessagePush {
   messageId: string;
 }
 
-/** Pushed when ChatGPT's light/dark theme changes, so the panel can follow it. */
+/** Pushed when ChatGPT's theme (light/dark or accent) changes, so the panel follows. */
 export interface ThemePush {
   kind: 'theme-change';
   theme: 'light' | 'dark';
+  /** ChatGPT's accent color, or null when its UI is monochrome. */
+  accent?: string | null;
 }
 
 // --- Content Script  <->  Main World Bridge (window CustomEvent) ----------

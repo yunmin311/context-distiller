@@ -65,13 +65,15 @@ function setupThemeSync(ctx: {
   isInvalid: boolean;
   onInvalidated: (cb: () => void) => void;
 }): void {
-  let last = detectChatgptTheme();
+  let last = '';
   const push = () => {
     if (ctx.isInvalid) return;
     const theme = detectChatgptTheme();
-    if (theme === last) return;
-    last = theme;
-    const msg: ThemePush = { kind: 'theme-change', theme };
+    const accent = detectChatgptAccent(theme);
+    const key = `${theme}|${accent ?? ''}`;
+    if (key === last) return;
+    last = key;
+    const msg: ThemePush = { kind: 'theme-change', theme, accent };
     try {
       void browser.runtime.sendMessage(msg).catch(() => {});
     } catch {
@@ -211,8 +213,10 @@ async function handle(message: PanelRequest): Promise<PanelResponse> {
     }
     case 'scroll-to-message':
       return scrollToMessage(message.messageId, message.orderedIds);
-    case 'get-theme':
-      return { kind: 'theme', theme: detectChatgptTheme() };
+    case 'get-theme': {
+      const theme = detectChatgptTheme();
+      return { kind: 'theme', theme, accent: detectChatgptAccent(theme) };
+    }
     default:
       return { kind: 'error', error: '未知请求' };
   }
@@ -305,7 +309,15 @@ async function scrollToMessage(messageId: string, orderedIds?: string[]): Promis
   const sel = `[data-message-id="${CSS.escape(messageId)}"]`;
   let el = document.querySelector<HTMLElement>(sel);
   if (!el && orderedIds && orderedIds.length > 0) {
+    // The FIRST seek in a session often failed because the virtualizer had not
+    // settled yet (heights still being measured), which is why it used to take a
+    // few clicks. Run the seek, and if it comes up empty, run it once more — the
+    // first pass leaves the list warmed up and measured, so the retry lands.
     el = await seekToMessage(messageId, orderedIds);
+    if (!el) {
+      await new Promise<void>((r) => setTimeout(r, 250));
+      el = await seekToMessage(messageId, orderedIds);
+    }
   }
   if (!el) {
     return { kind: 'scroll-result', ok: false, error: '这条当前找不到（可能刚被折叠/虚拟化），刷新页面后再试。' };
@@ -341,12 +353,86 @@ function detectChatgptTheme(): 'light' | 'dark' {
   return 'light';
 }
 
+/** Parse a CSS color to RGB, using the browser itself (handles rgb/hex/oklch/…). */
+function parseRgb(color: string): [number, number, number] | null {
+  if (!color) return null;
+  const probe = document.createElement('span');
+  probe.style.color = '';
+  probe.style.color = color;
+  if (!probe.style.color) return null; // not a color the browser accepts
+  probe.style.position = 'fixed';
+  probe.style.pointerEvents = 'none';
+  probe.style.opacity = '0';
+  document.body.appendChild(probe);
+  const resolved = getComputedStyle(probe).color;
+  probe.remove();
+  const m = resolved.match(/\d+(\.\d+)?/g);
+  if (!m || m.length < 3) return null;
+  // Reject fully transparent results.
+  if (m.length >= 4 && Number(m[3]) === 0) return null;
+  return [Number(m[0]), Number(m[1]), Number(m[2])];
+}
+
+/** Is this color a usable accent — i.e. not near-black, near-white, or grey? */
+function isUsableAccent(rgb: [number, number, number], theme: 'light' | 'dark'): boolean {
+  const [r, g, b] = rgb;
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  // ChatGPT's primary button is monochrome (black on light / white on dark); a
+  // greyscale color is not an accent worth borrowing, so require some saturation
+  // OR a mid luminance that still reads as a tint.
+  if (max - min < 18) return false;
+  return theme === 'dark' ? lum > 40 : lum < 225;
+}
+
+/**
+ * Read ChatGPT's own accent / primary-button color so the panel can borrow it.
+ * Tries the CSS custom properties ChatGPT defines on :root, then falls back to the
+ * computed background of the composer's send button. Returns null when the page
+ * only offers a monochrome button (then the panel keeps its own neutral accent).
+ */
+function detectChatgptAccent(theme: 'light' | 'dark'): string | null {
+  const rootStyle = getComputedStyle(document.documentElement);
+  const VARS = [
+    '--interactive-bg-accent-default',
+    '--interactive-label-accent-default',
+    '--accent-primary',
+    '--brand-purple',
+    '--link',
+    '--text-accent',
+  ];
+  for (const name of VARS) {
+    const raw = rootStyle.getPropertyValue(name).trim();
+    if (!raw) continue;
+    const rgb = parseRgb(raw);
+    if (rgb && isUsableAccent(rgb, theme)) return `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})`;
+  }
+  // Fall back to the send button / a prominent link.
+  const candidates = [
+    document.querySelector<HTMLElement>('[data-testid="send-button"]'),
+    document.querySelector<HTMLElement>('button[aria-label*="Send" i]'),
+  ];
+  for (const el of candidates) {
+    if (!el) continue;
+    const cs = getComputedStyle(el);
+    for (const raw of [cs.backgroundColor, cs.color]) {
+      const rgb = parseRgb(raw);
+      if (rgb && isUsableAccent(rgb, theme)) return `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})`;
+    }
+  }
+  return null;
+}
+
 /** Non-layout highlight (outline ring + soft glow), restored after a moment.
  *  Monochrome and tinted to ChatGPT's OWN theme, so it reads as native instead of
  *  a clashing accent. Saves/restores the inline styles we touch. */
 function flashElement(el: HTMLElement): void {
-  const dark = detectChatgptTheme() === 'dark';
-  const ring = dark ? 'rgba(236, 236, 241, 0.72)' : 'rgba(32, 33, 38, 0.6)';
+  const theme = detectChatgptTheme();
+  const dark = theme === 'dark';
+  // Prefer ChatGPT's own accent; fall back to a monochrome ring in its theme.
+  const accent = detectChatgptAccent(theme);
+  const ring = accent ?? (dark ? 'rgba(236, 236, 241, 0.72)' : 'rgba(32, 33, 38, 0.6)');
   const glow = dark ? 'rgba(236, 236, 241, 0.14)' : 'rgba(32, 33, 38, 0.1)';
   const prev = {
     outline: el.style.outline,
@@ -404,41 +490,57 @@ async function seekToMessage(messageId: string, orderedIds: string[]): Promise<H
   const wait = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
   const maxTop = () => Math.max(1, container.scrollHeight - container.clientHeight);
 
+  // Bracket of scroll positions known to sit BEFORE / AFTER the target. Both ends
+  // are updated from what's actually mounted, so an overshoot in either direction
+  // tightens the bracket instead of leaving a stale bound (which made the first
+  // seek wander and need several clicks).
   let lo = 0;
   let hi = maxTop();
-  // First guess: proportional to the message's position in the thread.
   let top = (targetOrder / Math.max(1, orderedIds.length - 1)) * hi;
 
   for (let attempt = 0; attempt < 24; attempt += 1) {
     container.scrollTo({ top, behavior: 'auto' });
-    await wait(350);
+    await wait(320);
 
     const hit = document.querySelector<HTMLElement>(sel);
     if (hit) return hit;
 
-    hi = maxTop(); // extent shifts as items mount / unmount
+    const extent = maxTop(); // extent shifts as items mount / unmount
+    if (hi > extent) hi = extent;
     const mounted = Array.from(document.querySelectorAll<HTMLElement>('[data-message-id]'))
       .map((node) => orderOf.get(node.getAttribute('data-message-id') || ''))
       .filter((o): o is number => typeof o === 'number');
 
     if (mounted.length === 0) {
-      top = Math.min(hi, top + container.clientHeight);
+      top = Math.min(extent, top + container.clientHeight);
       continue;
     }
     const minO = Math.min(...mounted);
     const maxO = Math.max(...mounted);
+    const span = Math.max(1, orderedIds.length - 1);
+
     if (targetOrder < minO) {
-      hi = top;
-      top = (lo + top) / 2; // target is above what's mounted
+      // Overshot: everything mounted is AFTER the target → this position is an
+      // upper bound. Interpolate using how far past we went, then clamp.
+      hi = Math.min(hi, top);
+      const guess = top - ((minO - targetOrder) / span) * extent - container.clientHeight * 0.5;
+      top = Math.max(lo, Math.min(hi, guess > lo ? guess : (lo + hi) / 2));
     } else if (targetOrder > maxO) {
-      lo = top;
-      top = (top + hi) / 2; // target is below
+      // Undershot: everything mounted is BEFORE the target → lower bound.
+      lo = Math.max(lo, top);
+      const guess = top + ((targetOrder - maxO) / span) * extent + container.clientHeight * 0.5;
+      top = Math.min(hi, Math.max(lo, guess < hi ? guess : (lo + hi) / 2));
     } else {
-      // Within the mounted band but not yet rendered — give it a beat, then nudge.
+      // Within the mounted band but not yet painted — give it a beat, then nudge.
       await wait(200);
       const late = document.querySelector<HTMLElement>(sel);
       if (late) return late;
-      top = Math.min(hi, top + container.clientHeight * 0.5);
+      top = Math.min(hi, top + container.clientHeight * 0.4);
+    }
+    // Bracket collapsed without a hit — the extent moved under us; widen once.
+    if (hi - lo < 8) {
+      lo = 0;
+      hi = extent;
     }
   }
   return document.querySelector<HTMLElement>(sel);
