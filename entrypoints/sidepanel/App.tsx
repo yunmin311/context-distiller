@@ -278,6 +278,16 @@ export function App() {
           <span className="muted tiny topbar-count">{state.messages.length}</span>
         )}
         <button
+          type="button"
+          className={`scratch-toggle${scratchpadOpen ? ' scratch-toggle-on' : ''}`}
+          title="便签：随手记的个人批注，只存本地、跨会话保留；永远不会编译进输出，也不发送"
+          aria-expanded={scratchpadOpen}
+          onClick={() => setScratchpadOpen((v) => !v)}
+        >
+          便签
+          {state.scratchpad.trim() !== '' && <span className="scratch-dot" aria-hidden />}
+        </button>
+        <button
           className="icon-btn topbar-refresh"
           title="读取 / 刷新当前对话"
           aria-label="读取或刷新当前对话"
@@ -292,6 +302,10 @@ export function App() {
           )}
         </button>
       </header>
+
+      {scratchpadOpen && (
+        <Scratchpad value={state.scratchpad} onCommit={actions.setScratchpad} />
+      )}
 
       <main className="app-main">
         {state.status === 'idle' && (
@@ -384,33 +398,18 @@ export function App() {
       </main>
 
       <footer className="app-footer">
-        {scratchpadOpen && (
-          <Scratchpad value={state.scratchpad} onCommit={actions.setScratchpad} />
-        )}
         <div className="footer-meta">
-          <div className="footer-meta-left">
-            <label
-              className="remember-toggle"
-              title="打开后：本次对话与整理会存到本地，下次打开自动恢复；关闭即清除（默认关闭，不落盘）"
-            >
-              <input
-                type="checkbox"
-                checked={state.rememberSession}
-                onChange={(e) => actions.setRemember(e.target.checked)}
-              />
-              记住本次
-            </label>
-            <button
-              type="button"
-              className={`scratch-toggle${scratchpadOpen ? ' scratch-toggle-on' : ''}`}
-              title="便签：随手记的个人批注，只存本地、跨会话保留；永远不会编译进输出，也不发送"
-              aria-expanded={scratchpadOpen}
-              onClick={() => setScratchpadOpen((v) => !v)}
-            >
-              便签
-              {state.scratchpad.trim() !== '' && <span className="scratch-dot" aria-hidden />}
-            </button>
-          </div>
+          <label
+            className="remember-toggle"
+            title="打开后：本次对话与整理会存到本地，下次打开自动恢复；关闭即清除（默认关闭，不落盘）"
+          >
+            <input
+              type="checkbox"
+              checked={state.rememberSession}
+              onChange={(e) => actions.setRemember(e.target.checked)}
+            />
+            记住本次
+          </label>
           <span className="muted tiny">
             {result.fragmentCount} 段 · {result.charCount} 字
           </span>

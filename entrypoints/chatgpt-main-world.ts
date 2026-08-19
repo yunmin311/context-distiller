@@ -89,30 +89,51 @@ export default defineUnlistedScript(() => {
   }
 
   /**
+   * fetch → JSON with a few retries. A long-thread read used to fall back to the
+   * partial DOM whenever the session or conversation request had a single
+   * transient hiccup (a 429 rate-limit, a 5xx, a momentary network blip). Retrying
+   * a couple of times with a short backoff makes the full read far more reliable.
+   */
+  async function fetchJsonRetry(url: string, init: RequestInit, attempts: number): Promise<any> {
+    let lastStatus = 0;
+    for (let i = 0; i < attempts; i += 1) {
+      try {
+        const r = await fetch(url, init);
+        if (r.ok) return await r.json();
+        lastStatus = r.status;
+      } catch {
+        // network hiccup — fall through to the backoff + retry
+      }
+      if (i < attempts - 1) await new Promise((res) => setTimeout(res, 400 * (i + 1)));
+    }
+    throw new Error(`fetch failed after ${attempts} tries (last status ${lastStatus || 'network'}): ${url}`);
+  }
+
+  /**
    * Fetch the COMPLETE conversation from ChatGPT's own backend. This runs in the
    * PAGE world, so the same-origin session auth works exactly like the site's own
    * requests (a content-script fetch in the isolated world can't reliably
    * authenticate — that made long reads fall back to the mounted DOM and return
    * only part of the thread). One request returns every turn, any length.
+   *
+   * Throws a descriptive error on every failure path (instead of returning null),
+   * so the content script can log WHY it fell back to the partial DOM read.
    */
-  async function extractViaApi(): Promise<MwRawMessage[] | null> {
+  async function extractViaApi(): Promise<MwRawMessage[]> {
     const convId = location.pathname.match(/\/c\/([\w-]+)/)?.[1];
-    if (!convId) return null;
+    if (!convId) throw new Error('no conversation id in URL (not on a /c/ page)');
 
-    const session = await fetch('/api/auth/session', { credentials: 'include' })
-      .then((r) => (r.ok ? r.json() : null))
-      .catch(() => null);
+    const session = await fetchJsonRetry('/api/auth/session', { credentials: 'include' }, 3);
     const token: string | undefined = session?.accessToken;
-    if (!token) return null;
+    if (!token) throw new Error('session returned no accessToken (are you logged in?)');
 
-    const conv = await fetch(`/backend-api/conversation/${convId}`, {
-      headers: { Authorization: `Bearer ${token}` },
-      credentials: 'include',
-    })
-      .then((r) => (r.ok ? r.json() : null))
-      .catch(() => null);
+    const conv = await fetchJsonRetry(
+      `/backend-api/conversation/${convId}`,
+      { headers: { Authorization: `Bearer ${token}` }, credentials: 'include' },
+      3,
+    );
     const mapping = conv?.mapping;
-    if (!mapping || typeof mapping !== 'object') return null;
+    if (!mapping || typeof mapping !== 'object') throw new Error('conversation had no mapping');
 
     // Walk ONLY the active branch (current node → root), so regenerated / edited
     // dead branches are excluded and the order is exactly what's shown on screen.
@@ -149,7 +170,8 @@ export default defineUnlistedScript(() => {
         out.push({ id: msg.id, role, text });
       }
     }
-    return out.length > 0 ? out : null;
+    if (out.length === 0) throw new Error('no user/assistant turns after filtering');
+    return out;
   }
 
   window.addEventListener(MW_REQUEST_EVENT, (event: Event) => {

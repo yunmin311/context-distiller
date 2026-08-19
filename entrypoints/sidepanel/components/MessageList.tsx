@@ -25,17 +25,6 @@ interface MessageListProps {
   onLocate: (messageId: string) => void;
 }
 
-/** Crosshair — "locate this in the conversation". */
-function LocateIcon() {
-  return (
-    <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor"
-      strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-      <circle cx="12" cy="12" r="3.2" />
-      <path d="M12 2v3M12 19v3M2 12h3M19 12h3" />
-    </svg>
-  );
-}
-
 const NEW_MODULE = '__new__';
 
 interface Popover extends SelectionInput {
@@ -118,16 +107,15 @@ const MessageRow = memo(function MessageRow({
     >
       <header className="msg-head">
         <span className={`tag tag-${message.role}`}>{roleLabel(message.role)}</span>
-        <span className="muted tiny">#{message.order + 1}</span>
-        <div className="spacer" />
         <button
-          className="icon-btn xs"
-          title="在左侧对话里定位这条（只滚动页面，不影响账号）"
+          className="msg-num"
+          title="点编号：在左侧对话里定位这条（只滚动页面，不影响账号）"
           aria-label="在对话里定位这条"
           onClick={() => onLocate(message.id)}
         >
-          <LocateIcon />
+          #{message.order + 1}
         </button>
+        <div className="spacer" />
         <button
           className={`mark-btn${marked ? ' mark-btn-on' : ''}`}
           title={marked ? '取消标记' : '标记这条（会进【标记】段，一起编译）'}

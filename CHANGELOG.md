@@ -8,8 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- **便签 (scratchpad)** — a single free-text annotation pad in the footer (toggle it
-  open beside 「记住本次」; a dot on the toggle signals it has content). Purely
+- **便签 (scratchpad)** — a single free-text annotation pad in the **top bar** (toggle
+  it open beside the conversation title; a dot on the toggle signals it has
+  content), dropping down as a strip under the bar. Purely
   personal notes for your own use: it **never compiles into the output** and is
   never passed to the compiler at all — the deliberate opposite of **消息标记**,
   which *do* compile into their own 【标记】 section. Stored as long-term local
@@ -22,11 +23,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   placed after the grouped material. Held in memory only, persisted with the
   conversation solely when 「记住本次」 is on. (For a pure-annotation pad that never
   compiles, see 便签 above.)
-- **在对话里定位** — every message in the reading list **and** every fragment in the
-  workspace gets a crosshair button that scrolls the ChatGPT page to that message
-  and flashes a ring around it. A **pure local scroll** — no request, nothing done
-  to the account, no ban risk. A message ChatGPT has virtualized out of the DOM
-  can't be reached, so it says so instead of guessing.
+- **在对话里定位** — click a message's **#N number** (it *is* the button — no extra
+  icon) to scroll the ChatGPT page to that message and flash a ring around it;
+  workspace fragments keep a small crosshair button for the same. A **pure local
+  scroll** — no request, nothing done to the account, no ban risk. A message
+  ChatGPT has virtualized out of the DOM can't be reached, so it says so instead
+  of guessing.
 - **Prompt library** — a built-in, **offline** set of ready-made "requirement"
   prompts (总结提炼 / 分析审视 / 改写润色 / 结构化 / 迁移交接) you can pull into a
   custom requirement via **从库导入**, then rename / trim / keep. Several entries
@@ -43,6 +45,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   open** — while a real text selection (drag-to-select for add-fragment) is left
   untouched. Collapsing now **scrolls the message back into view**, so 收起 lands you
   on the message you just closed instead of stranding you far down the list.
+
+### Fixed
+- **Long-conversation full read is much more reliable.** A single transient hiccup
+  on the session or conversation request (a 429 rate-limit, a 5xx, a network blip)
+  used to drop the whole read to the partial DOM path — the one that only sees a
+  screenful until you scroll the entire thread. The backend fetches now **retry a
+  few times with backoff**, the read **timeout is raised to 20s** (a big thread's
+  JSON needs the room), and when the full read still can't run the content script
+  now **logs the exact reason** before falling back, so a failure is diagnosable at
+  a glance instead of silent.
 
 ## [0.5.0] — 2026-08-12
 

@@ -194,8 +194,10 @@ async function getConversation(): Promise<PanelResponse> {
   // Primary: full thread from ChatGPT's backend, fetched in the MAIN WORLD (page
   // context — same-origin session auth works there, unlike an isolated-world
   // fetch, which made long reads silently fall back to a partial DOM read).
-  // Generous timeout so a big conversation's JSON has time to arrive.
-  const api = await requestMainWorld(8000, 'extract-api');
+  // Generous timeout: a very long conversation's JSON (fetch + parse + walk) can
+  // take a while, and timing out here is exactly what made long reads fall back to
+  // the partial DOM. 20s gives the full read room even on a slow machine.
+  const api = await requestMainWorld(20000, 'extract-api');
   if (api?.ok && api.messages && api.messages.length > 0) {
     raw = api.messages.map((m) => ({
       id: m.id,
@@ -206,8 +208,12 @@ async function getConversation(): Promise<PanelResponse> {
     source = 'page-data';
     partial = false; // the whole conversation, not just what's mounted
   } else {
-    // Fallback: read the mounted DOM (main-world text where available). May be
-    // partial when ChatGPT virtualizes a long thread.
+    // Full read unavailable — record WHY (a null api = it timed out), then fall
+    // back to the mounted DOM (partial when ChatGPT virtualizes a long thread).
+    console.info(
+      '[Context Distiller] full read unavailable → partial DOM read. reason:',
+      api ? api.error ?? 'unknown' : 'timed out (no response within 20s)',
+    );
     const domRaw = chatgptAdapter.extractFromDom();
     if (domRaw.length > 0) {
       const mw = await requestMainWorld(400);
