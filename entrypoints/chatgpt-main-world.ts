@@ -94,19 +94,30 @@ export default defineUnlistedScript(() => {
    * transient hiccup (a 429 rate-limit, a 5xx, a momentary network blip). Retrying
    * a couple of times with a short backoff makes the full read far more reliable.
    */
-  async function fetchJsonRetry(url: string, init: RequestInit, attempts: number): Promise<any> {
-    let lastStatus = 0;
+  async function fetchJsonRetry(
+    url: string,
+    init: RequestInit,
+    attempts: number,
+    perTryMs: number,
+  ): Promise<any> {
+    let lastErr = 'network';
     for (let i = 0; i < attempts; i += 1) {
+      // Abort a single try that HANGS (a stuck socket), so we retry instead of
+      // silently eating the whole read budget — the old failure mode on long reads.
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), perTryMs);
       try {
-        const r = await fetch(url, init);
+        const r = await fetch(url, { ...init, signal: ctrl.signal });
+        clearTimeout(timer);
         if (r.ok) return await r.json();
-        lastStatus = r.status;
+        lastErr = `status ${r.status}`;
       } catch {
-        // network hiccup — fall through to the backoff + retry
+        clearTimeout(timer);
+        lastErr = ctrl.signal.aborted ? `hung > ${perTryMs}ms` : 'network error';
       }
-      if (i < attempts - 1) await new Promise((res) => setTimeout(res, 400 * (i + 1)));
+      if (i < attempts - 1) await new Promise((res) => setTimeout(res, 500 * (i + 1)));
     }
-    throw new Error(`fetch failed after ${attempts} tries (last status ${lastStatus || 'network'}): ${url}`);
+    throw new Error(`fetch failed after ${attempts} tries (${lastErr}): ${url}`);
   }
 
   /**
@@ -123,14 +134,16 @@ export default defineUnlistedScript(() => {
     const convId = location.pathname.match(/\/c\/([\w-]+)/)?.[1];
     if (!convId) throw new Error('no conversation id in URL (not on a /c/ page)');
 
-    const session = await fetchJsonRetry('/api/auth/session', { credentials: 'include' }, 3);
+    const session = await fetchJsonRetry('/api/auth/session', { credentials: 'include' }, 2, 7000);
     const token: string | undefined = session?.accessToken;
     if (!token) throw new Error('session returned no accessToken (are you logged in?)');
 
+    // The big one — give each try up to 15s (a huge thread's JSON is large), two tries.
     const conv = await fetchJsonRetry(
       `/backend-api/conversation/${convId}`,
       { headers: { Authorization: `Bearer ${token}` }, credentials: 'include' },
-      3,
+      2,
+      15000,
     );
     const mapping = conv?.mapping;
     if (!mapping || typeof mapping !== 'object') throw new Error('conversation had no mapping');

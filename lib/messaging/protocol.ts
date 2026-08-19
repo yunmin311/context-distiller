@@ -15,7 +15,13 @@ export type PanelRequest =
   | { kind: 'get-conversation' }
   | { kind: 'get-selection' }
   | { kind: 'fill-composer'; text: string }
-  | { kind: 'scroll-to-message'; messageId: string };
+  | {
+      kind: 'scroll-to-message';
+      messageId: string;
+      /** All message ids in display order, so the page can seek a virtualized
+       *  (unmounted) message by binary-searching its scroll position. */
+      orderedIds?: string[];
+    };
 
 /** A raw text selection the content script resolved to a message + role. */
 export interface SelectionPayload {

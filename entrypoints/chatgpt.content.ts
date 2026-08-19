@@ -177,7 +177,7 @@ async function handle(message: PanelRequest): Promise<PanelResponse> {
       return { kind: 'fill', ok, error: ok ? undefined : '未能写入输入框，请改用“复制完整消息”。' };
     }
     case 'scroll-to-message':
-      return scrollToMessage(message.messageId);
+      return scrollToMessage(message.messageId, message.orderedIds);
     default:
       return { kind: 'error', error: '未知请求' };
   }
@@ -194,10 +194,11 @@ async function getConversation(): Promise<PanelResponse> {
   // Primary: full thread from ChatGPT's backend, fetched in the MAIN WORLD (page
   // context — same-origin session auth works there, unlike an isolated-world
   // fetch, which made long reads silently fall back to a partial DOM read).
-  // Generous timeout: a very long conversation's JSON (fetch + parse + walk) can
-  // take a while, and timing out here is exactly what made long reads fall back to
-  // the partial DOM. 20s gives the full read room even on a slow machine.
-  const api = await requestMainWorld(20000, 'extract-api');
+  // Generous timeout: a very long conversation's JSON (fetch + retries + parse +
+  // walk) can take a while, and timing out here is exactly what made long reads
+  // fall back to the partial DOM. 40s covers the full read (with retries) even on
+  // a slow machine or a briefly rate-limited endpoint.
+  const api = await requestMainWorld(40000, 'extract-api');
   if (api?.ok && api.messages && api.messages.length > 0) {
     raw = api.messages.map((m) => ({
       id: m.id,
@@ -256,22 +257,31 @@ async function getConversation(): Promise<PanelResponse> {
 }
 
 /**
- * Scroll the ChatGPT page to a message and flash a brief ring around it. This is
- * a PURE, LOCAL scroll of the page the user already has open — no network request,
- * no message sent, nothing done to the account (zero ban risk). If the message
- * isn't mounted (ChatGPT virtualizes long threads), we can't reach it, so we say
- * so instead of guessing.
+ * Scroll the ChatGPT page to a message and flash a ring around it. PURE, LOCAL
+ * scroll of the page the user already has open — no network request, no message
+ * sent, nothing done to the account (zero ban risk).
+ *
+ * ChatGPT virtualizes long threads, so a message read via the backend API often
+ * isn't in the DOM. When it isn't, we SEEK it: scroll the conversation container
+ * toward its position (binary-searched using the full ordered id list) until it
+ * mounts. If it still can't be found, we say so instead of guessing.
  */
-function scrollToMessage(messageId: string): PanelResponse {
-  const el = document.querySelector<HTMLElement>(
-    `[data-message-id="${CSS.escape(messageId)}"]`,
-  );
+async function scrollToMessage(messageId: string, orderedIds?: string[]): Promise<PanelResponse> {
+  let el = document.querySelector<HTMLElement>(`[data-message-id="${CSS.escape(messageId)}"]`);
+  if (!el && orderedIds && orderedIds.length > 0) {
+    el = await seekToMessage(messageId, orderedIds);
+  }
   if (!el) {
-    return { kind: 'scroll-result', ok: false, error: '这条当前不在页面上，向上滚动加载后再试。' };
+    return { kind: 'scroll-result', ok: false, error: '这条当前找不到（可能刚被折叠/虚拟化），刷新页面后再试。' };
   }
   el.scrollIntoView({ block: 'center', behavior: 'smooth' });
-  // Non-layout highlight (outline ring), restored after a moment. We save and
-  // restore the inline styles we touch so ChatGPT's own styling is left intact.
+  flashElement(el);
+  return { kind: 'scroll-result', ok: true };
+}
+
+/** Non-layout highlight (outline ring), restored after a moment. Saves/restores
+ *  the inline styles we touch so ChatGPT's own styling is left intact. */
+function flashElement(el: HTMLElement): void {
   const prev = {
     outline: el.style.outline,
     offset: el.style.outlineOffset,
@@ -288,7 +298,72 @@ function scrollToMessage(messageId: string): PanelResponse {
     el.style.borderRadius = prev.radius;
     el.style.transition = prev.transition;
   }, 1600);
-  return { kind: 'scroll-result', ok: true };
+}
+
+/** The scrollable ancestor that holds the conversation (best effort). */
+function findScrollContainer(): HTMLElement {
+  const anyMsg = document.querySelector<HTMLElement>('[data-message-author-role]');
+  let el: HTMLElement | null = anyMsg?.parentElement ?? null;
+  while (el && el !== document.body) {
+    const oy = getComputedStyle(el).overflowY;
+    if ((oy === 'auto' || oy === 'scroll') && el.scrollHeight > el.clientHeight + 60) return el;
+    el = el.parentElement;
+  }
+  return (document.scrollingElement as HTMLElement) ?? document.documentElement;
+}
+
+/**
+ * Seek a virtualized (unmounted) message by scrolling the container to its likely
+ * position, using the mounted messages we CAN map to an order as feedback to
+ * binary-search toward the target. Bounded so it can't scroll forever.
+ */
+async function seekToMessage(messageId: string, orderedIds: string[]): Promise<HTMLElement | null> {
+  const targetOrder = orderedIds.indexOf(messageId);
+  if (targetOrder < 0) return null;
+  const container = findScrollContainer();
+  const orderOf = new Map(orderedIds.map((id, i) => [id, i] as const));
+  const sel = `[data-message-id="${CSS.escape(messageId)}"]`;
+  const wait = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+  const maxTop = () => Math.max(1, container.scrollHeight - container.clientHeight);
+
+  let lo = 0;
+  let hi = maxTop();
+  // First guess: proportional to the message's position in the thread.
+  let top = (targetOrder / Math.max(1, orderedIds.length - 1)) * hi;
+
+  for (let attempt = 0; attempt < 16; attempt += 1) {
+    container.scrollTo({ top, behavior: 'auto' });
+    await wait(300);
+
+    const hit = document.querySelector<HTMLElement>(sel);
+    if (hit) return hit;
+
+    hi = maxTop(); // extent shifts as items mount / unmount
+    const mounted = Array.from(document.querySelectorAll<HTMLElement>('[data-message-id]'))
+      .map((node) => orderOf.get(node.getAttribute('data-message-id') || ''))
+      .filter((o): o is number => typeof o === 'number');
+
+    if (mounted.length === 0) {
+      top = Math.min(hi, top + container.clientHeight);
+      continue;
+    }
+    const minO = Math.min(...mounted);
+    const maxO = Math.max(...mounted);
+    if (targetOrder < minO) {
+      hi = top;
+      top = (lo + top) / 2; // target is above what's mounted
+    } else if (targetOrder > maxO) {
+      lo = top;
+      top = (top + hi) / 2; // target is below
+    } else {
+      // Within the mounted band but not yet rendered — give it a beat, then nudge.
+      await wait(200);
+      const late = document.querySelector<HTMLElement>(sel);
+      if (late) return late;
+      top = Math.min(hi, top + container.clientHeight * 0.5);
+    }
+  }
+  return document.querySelector<HTMLElement>(sel);
 }
 
 function readSelection(): SelectionPayload | null {

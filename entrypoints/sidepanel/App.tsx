@@ -244,7 +244,10 @@ export function App() {
   // Scroll the ChatGPT page to a fragment's source message and flash it. Pure
   // client-side scroll (no request, no account action) — see docs/PRIVACY.md.
   const handleLocate = useCallback(async (messageId: string) => {
-    const res = await sendToActiveTab({ kind: 'scroll-to-message', messageId });
+    // Pass the whole conversation's ids in order, so the page can binary-search
+    // its scroll position to a message ChatGPT has virtualized out of the DOM.
+    const orderedIds = latestRef.current.messages.map((m) => m.id);
+    const res = await sendToActiveTab({ kind: 'scroll-to-message', messageId, orderedIds });
     if (res.kind === 'scroll-result' && res.ok) return;
     const err =
       res.kind === 'scroll-result'
@@ -274,9 +277,6 @@ export function App() {
         <span className="topbar-title" title={topTitle}>
           {topTitle}
         </span>
-        {state.status === 'ready' && (
-          <span className="muted tiny topbar-count">{state.messages.length}</span>
-        )}
         <button
           type="button"
           className={`scratch-toggle${scratchpadOpen ? ' scratch-toggle-on' : ''}`}
@@ -287,6 +287,9 @@ export function App() {
           便签
           {state.scratchpad.trim() !== '' && <span className="scratch-dot" aria-hidden />}
         </button>
+        {state.status === 'ready' && (
+          <span className="muted tiny topbar-count">{state.messages.length}</span>
+        )}
         <button
           className="icon-btn topbar-refresh"
           title="读取 / 刷新当前对话"
