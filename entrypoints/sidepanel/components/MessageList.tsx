@@ -107,7 +107,7 @@ const MessageRow = memo(function MessageRow({
         <div className="spacer" />
         <button
           className={`mark-btn${marked ? ' mark-btn-on' : ''}`}
-          title={marked ? '取消标记' : '标记这条（只帮读，不进输出）'}
+          title={marked ? '取消标记' : '标记这条（会进【标记】段，一起编译）'}
           aria-pressed={marked}
           aria-label={marked ? '取消标记' : '标记这条'}
           onClick={() => onToggleMark(message.id)}

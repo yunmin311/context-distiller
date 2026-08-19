@@ -14,7 +14,8 @@ export type PanelRequest =
   | { kind: 'ping' }
   | { kind: 'get-conversation' }
   | { kind: 'get-selection' }
-  | { kind: 'fill-composer'; text: string };
+  | { kind: 'fill-composer'; text: string }
+  | { kind: 'scroll-to-message'; messageId: string };
 
 /** A raw text selection the content script resolved to a message + role. */
 export interface SelectionPayload {
@@ -39,6 +40,7 @@ export type PanelResponse =
   | { kind: 'selection'; ok: true; selection: SelectionPayload | null }
   | { kind: 'selection'; ok: false; error: string }
   | { kind: 'fill'; ok: boolean; error?: string }
+  | { kind: 'scroll-result'; ok: boolean; error?: string }
   | { kind: 'error'; error: string };
 
 // --- Content Script  ->  Side Panel (push, chrome.runtime.sendMessage) -----

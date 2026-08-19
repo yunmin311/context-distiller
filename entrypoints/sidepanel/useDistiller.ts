@@ -390,11 +390,13 @@ function reducer(state: DistillerState, action: Action): DistillerState {
       return { ...state, rememberSession: action.value };
 
     case 'clear-material':
-      // Clear MATERIAL only — keep the module structure and custom requirements.
+      // Clear MATERIAL (fragments + marks + selections) — keep the module
+      // structure and custom requirements.
       return {
         ...state,
         groups: state.groups.map((g) => ({ ...g, fragments: [] })),
         selections: emptySelections(),
+        marks: {},
       };
 
     default:

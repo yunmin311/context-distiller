@@ -19,6 +19,7 @@ import { BASE_TASK_PROMPT, EXTRA_PRESETS, getPreset } from './presets';
  *   6. Output-format (markup) prompt
  *   7. Additional-requirement prompts (built-ins, then customs)
  *   8. User material (by group order, then fragment order)
+ *   9. Marked messages (读时标记) → their own 【标记】 section
  */
 
 export interface CompileOptions {
@@ -30,6 +31,11 @@ export interface CompileOptions {
    * still does no AI rewriting; it just concatenates the user's own text.
    */
   customExtras?: PresetOption[];
+  /**
+   * Reading marks (读时标记) to compile into their own 【标记】 section, after the
+   * grouped material. Each is a whole marked message plus its optional note.
+   */
+  marks?: Array<{ text: string; note?: string; order: number }>;
 }
 
 export interface CompileResult {
@@ -114,9 +120,21 @@ export function compile(
     );
   }
 
+  // --- 8: marked messages (读时标记) — their own section, message order ----
+  const marks = [...(options.marks ?? [])].sort((a, b) => a.order - b.order);
+  const markBlocks = marks.map((mk) => {
+    fragmentCount += 1;
+    const body = mk.text.trimEnd();
+    const note = mk.note?.trim();
+    return note ? `${body}\n（备注：${note}）` : body;
+  });
+
   const sections = [instructionBlock];
   if (groupBlocks.length > 0) {
     sections.push(groupBlocks.join('\n\n'));
+  }
+  if (markBlocks.length > 0) {
+    sections.push(`【标记】\n${markBlocks.join('\n\n')}`);
   }
 
   const text = sections.join('\n\n');

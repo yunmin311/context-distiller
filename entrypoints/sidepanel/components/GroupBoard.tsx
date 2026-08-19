@@ -10,10 +10,23 @@ interface GroupBoardProps {
   onSetNote: (groupId: string, fragmentId: string, note: string) => void;
   onSetText: (groupId: string, fragmentId: string, text: string) => void;
   onRemoveGroup: (groupId: string) => void;
+  /** Scroll the ChatGPT page to a fragment's source message (local scroll only). */
+  onLocate: (messageId: string) => void;
 }
 
 function roleLabel(role: 'user' | 'assistant'): string {
   return role === 'user' ? '你' : 'AI';
+}
+
+/** Crosshair — "locate this in the conversation". */
+function LocateIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor"
+      strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <circle cx="12" cy="12" r="3.2" />
+      <path d="M12 2v3M12 19v3M2 12h3M19 12h3" />
+    </svg>
+  );
 }
 
 interface MoveTarget {
@@ -32,6 +45,7 @@ interface FragmentRowProps {
   onSetNote: (groupId: string, fragmentId: string, note: string) => void;
   onSetText: (groupId: string, fragmentId: string, text: string) => void;
   onMoveToGroup: (fromGroupId: string, toGroupId: string, fragmentId: string) => void;
+  onLocate: (messageId: string) => void;
 }
 
 /**
@@ -50,6 +64,7 @@ const FragmentRow = memo(function FragmentRow({
   onSetNote,
   onSetText,
   onMoveToGroup,
+  onLocate,
 }: FragmentRowProps) {
   const others = moveTargets.filter((t) => t.id !== groupId);
   const display = plainify(fragment.text);
@@ -78,6 +93,16 @@ const FragmentRow = memo(function FragmentRow({
       <div className="frag-head">
         <span className={`tag tag-${fragment.role} xs`}>{roleLabel(fragment.role)}</span>
         <div className="spacer" />
+        {fragment.messageId && (
+          <button
+            className="icon-btn xs"
+            onClick={() => onLocate(fragment.messageId!)}
+            title="在左侧对话里定位这条（只滚动页面，不影响账号）"
+            aria-label="在对话里定位这条"
+          >
+            <LocateIcon />
+          </button>
+        )}
         <button
           className="icon-btn xs"
           disabled={isFirst}
@@ -172,6 +197,7 @@ export function GroupBoard({
   onSetNote,
   onSetText,
   onRemoveGroup,
+  onLocate,
 }: GroupBoardProps) {
   // Stable move-target list (id + title), rebuilt only when group ids/titles
   // change — not on every fragment / note edit — so the memoized rows stay put.
@@ -224,6 +250,7 @@ export function GroupBoard({
                       onSetNote={onSetNote}
                       onSetText={onSetText}
                       onMoveToGroup={onMoveToGroup}
+                      onLocate={onLocate}
                     />
                   ))}
                 </ul>

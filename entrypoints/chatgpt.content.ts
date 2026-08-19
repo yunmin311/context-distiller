@@ -176,6 +176,8 @@ async function handle(message: PanelRequest): Promise<PanelResponse> {
       const ok = await chatgptAdapter.fillComposer(message.text);
       return { kind: 'fill', ok, error: ok ? undefined : '未能写入输入框，请改用“复制完整消息”。' };
     }
+    case 'scroll-to-message':
+      return scrollToMessage(message.messageId);
     default:
       return { kind: 'error', error: '未知请求' };
   }
@@ -245,6 +247,42 @@ async function getConversation(): Promise<PanelResponse> {
 
   const conversation: ConversationInfo = { title, url, platform: chatgptAdapter.id };
   return { kind: 'conversation', ok: true, conversation, messages, partial, source };
+}
+
+/**
+ * Scroll the ChatGPT page to a message and flash a brief ring around it. This is
+ * a PURE, LOCAL scroll of the page the user already has open — no network request,
+ * no message sent, nothing done to the account (zero ban risk). If the message
+ * isn't mounted (ChatGPT virtualizes long threads), we can't reach it, so we say
+ * so instead of guessing.
+ */
+function scrollToMessage(messageId: string): PanelResponse {
+  const el = document.querySelector<HTMLElement>(
+    `[data-message-id="${CSS.escape(messageId)}"]`,
+  );
+  if (!el) {
+    return { kind: 'scroll-result', ok: false, error: '这条当前不在页面上，向上滚动加载后再试。' };
+  }
+  el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  // Non-layout highlight (outline ring), restored after a moment. We save and
+  // restore the inline styles we touch so ChatGPT's own styling is left intact.
+  const prev = {
+    outline: el.style.outline,
+    offset: el.style.outlineOffset,
+    radius: el.style.borderRadius,
+    transition: el.style.transition,
+  };
+  el.style.transition = 'outline-color 0.25s ease';
+  el.style.outline = '2px solid rgba(56, 132, 122, 0.9)';
+  el.style.outlineOffset = '3px';
+  el.style.borderRadius = '10px';
+  window.setTimeout(() => {
+    el.style.outline = prev.outline;
+    el.style.outlineOffset = prev.offset;
+    el.style.borderRadius = prev.radius;
+    el.style.transition = prev.transition;
+  }, 1600);
+  return { kind: 'scroll-result', ok: true };
 }
 
 function readSelection(): SelectionPayload | null {

@@ -112,9 +112,32 @@ export function App() {
     };
   }, [state.hydrated, state.status, handleLoad]);
 
+  // Marked messages (读时标记) still present in the read conversation, compiled
+  // into their own 【标记】 section (message order applied in the compiler).
+  const compiledMarks = useMemo(() => {
+    const byId = new Map(state.messages.map((m) => [m.id, m]));
+    const out: Array<{ text: string; note?: string; order: number }> = [];
+    for (const [id, note] of Object.entries(state.marks)) {
+      const m = byId.get(id);
+      if (m) out.push({ text: m.text, note: note.trim() || undefined, order: m.order });
+    }
+    return out;
+  }, [state.marks, state.messages]);
+
   const result = useMemo(
-    () => compile(state.groups, state.selections, { customExtras: state.customExtras }),
-    [state.groups, state.selections, state.customExtras],
+    () =>
+      compile(state.groups, state.selections, {
+        customExtras: state.customExtras,
+        marks: compiledMarks,
+      }),
+    [state.groups, state.selections, state.customExtras, compiledMarks],
+  );
+
+  // Grouped-material count (excludes marks) — gates the 整理工作区 board so that
+  // marks-only still compiles but doesn't show an empty board.
+  const groupFragmentCount = useMemo(
+    () => state.groups.reduce((n, g) => n + g.fragments.length, 0),
+    [state.groups],
   );
 
   // Message ids already added as a whole message — used to prevent duplicates.
@@ -216,9 +239,25 @@ export function App() {
     }
   }
 
+  // Scroll the ChatGPT page to a fragment's source message and flash it. Pure
+  // client-side scroll (no request, no account action) — see docs/PRIVACY.md.
+  const handleLocate = useCallback(async (messageId: string) => {
+    const res = await sendToActiveTab({ kind: 'scroll-to-message', messageId });
+    if (res.kind === 'scroll-result' && res.ok) return;
+    const err =
+      res.kind === 'scroll-result'
+        ? res.error ?? '未能跳转。'
+        : res.kind === 'error'
+          ? res.error
+          : '未能跳转，请确认 ChatGPT 对话页在前台。';
+    setToast({ text: err, tone: 'warn' });
+  }, []);
+
   function handleClear() {
-    const hasMaterial = state.groups.some((g) => g.fragments.length > 0);
-    if (hasMaterial && !window.confirm('清空本次整理？已选材料和备注都会丢失。')) return;
+    const hasMaterial =
+      state.groups.some((g) => g.fragments.length > 0) ||
+      Object.keys(state.marks).length > 0;
+    if (hasMaterial && !window.confirm('清空本次整理？已选材料、标记和备注都会丢失。')) return;
     actions.clearMaterial();
     setPreviewOpen(false);
     setToast({ text: '已清空。', tone: 'ok' });
@@ -301,7 +340,7 @@ export function App() {
               />
             </section>
 
-            {result.fragmentCount > 0 && (
+            {groupFragmentCount > 0 && (
               <section className="section">
                 <div className="eyebrow">整理工作区</div>
                 <GroupBoard
@@ -312,6 +351,7 @@ export function App() {
                   onSetNote={actions.setNote}
                   onSetText={actions.setText}
                   onRemoveGroup={actions.removeGroup}
+                  onLocate={handleLocate}
                 />
               </section>
             )}

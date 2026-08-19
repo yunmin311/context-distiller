@@ -180,6 +180,39 @@ describe('compileMessage', () => {
   });
 });
 
+describe('reading marks (读时标记) → 【标记】 section', () => {
+  it('compiles marks into a 【标记】 section, in message order, with notes', () => {
+    const result = compile([], EMPTY_SELECTIONS, {
+      marks: [
+        { text: '第二条被标记', order: 5 },
+        { text: '第一条被标记', note: '关键决定点', order: 1 },
+      ],
+    });
+    expect(result.text).toContain('【标记】');
+    // ordered by `order`, not array order
+    expect(result.text.indexOf('第一条被标记')).toBeLessThan(
+      result.text.indexOf('第二条被标记'),
+    );
+    // a note renders exactly like a fragment note
+    expect(result.text).toContain('第一条被标记\n（备注：关键决定点）');
+    // marks count as compiled blocks
+    expect(result.fragmentCount).toBe(2);
+  });
+
+  it('places the 【标记】 section after grouped material', () => {
+    const groups = [group('正文内容', 0, [frag('普通材料')])];
+    const text = compileMessage(groups, EMPTY_SELECTIONS, {
+      marks: [{ text: '标记内容', order: 0 }],
+    });
+    expect(text.indexOf('【正文内容】')).toBeLessThan(text.indexOf('【标记】'));
+  });
+
+  it('emits no 【标记】 section when there are no marks', () => {
+    expect(compileMessage([], EMPTY_SELECTIONS, { marks: [] })).toBe(BASE_TASK_PROMPT);
+    expect(compileMessage([], EMPTY_SELECTIONS)).toBe(BASE_TASK_PROMPT);
+  });
+});
+
 describe('compile (metadata)', () => {
   it('reports charCount by code points and counts fragments + used presets', () => {
     const groups = [group('框架', 0, [frag('一二三'), frag('四五')])];
