@@ -881,6 +881,78 @@ textarea:focus,
   align-items: center;
   gap: 8px;
 }
+.custom-name {
+  width: 100%;
+}
+.lib-open-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+/* 从库导入 picker */
+.lib-picker {
+  margin-top: 2px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.lib-search {
+  width: 100%;
+}
+.lib-list {
+  max-height: 240px;
+  overflow-y: auto;
+  border: 1px solid var(--line-2);
+  border-radius: var(--radius);
+  padding: 4px;
+}
+.lib-cat + .lib-cat {
+  margin-top: 4px;
+}
+.lib-cat-label {
+  font-size: 11px;
+  color: var(--muted);
+  padding: 4px 6px 2px;
+}
+.lib-item {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  padding: 6px 8px;
+  border: none;
+  border-radius: calc(var(--radius) - 2px);
+  background: none;
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.lib-item:hover {
+  background: var(--accent-weak);
+}
+.lib-item-name {
+  flex: 0 0 auto;
+  font-weight: 500;
+}
+.lib-item-src {
+  flex: 1 1 auto;
+  min-width: 0;
+  text-align: right;
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.lib-empty {
+  padding: 8px 6px;
+}
+.lib-note {
+  margin: 0;
+}
 
 /* inline "new module" row under the sticky selector */
 .new-module {

@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Prompt library** — a built-in, **offline** set of ready-made "requirement"
+  prompts (总结提炼 / 分析审视 / 改写润色 / 结构化 / 迁移交接) you can pull into a
+  custom requirement via **从库导入**, then rename / trim / keep. Several entries
+  are adapted from **Fabric** (MIT); the rest are original. Fully local — importing
+  makes no network request, so the local-only promise is unchanged. See
+  docs/THIRD_PARTY.md.
+- Custom requirements now take an explicit **name** (leave it blank to auto-derive
+  from the text), so a long imported prompt still shows a short, meaningful chip.
+  The editor also grew a larger multi-line box for pasting a detailed prompt.
+
+### Changed
+- The message **展开 / 收起** toggle moved from beside the #N number to the **end of
+  the message text** (inline), and the collapsed preview is now **tap-anywhere-to-
+  open** — while a real text selection (drag-to-select for add-fragment) is left
+  untouched.
+
 ## [0.5.0] — 2026-08-12
 
 ### Added

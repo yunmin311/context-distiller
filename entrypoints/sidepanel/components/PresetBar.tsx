@@ -1,5 +1,7 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { PRESET_GROUPS } from '../../../lib/core/presets';
+import { PROMPT_LIBRARY, PROMPT_LIBRARY_CATEGORIES } from '../../../lib/core/prompt-library';
+import type { PromptLibraryEntry } from '../../../lib/core/prompt-library';
 import type { PresetOption, PromptSelections } from '../../../lib/core/types';
 import type { SingleKey } from '../useDistiller';
 
@@ -8,8 +10,8 @@ interface PresetBarProps {
   customExtras: PresetOption[];
   onSetSingle: (key: SingleKey, presetId: string) => void;
   onToggleExtra: (presetId: string) => void;
-  onAddCustom: (text: string, persist: boolean) => void;
-  onUpdateCustom: (id: string, text: string) => void;
+  onAddCustom: (name: string, text: string, persist: boolean) => void;
+  onUpdateCustom: (id: string, name: string, text: string) => void;
   onRemoveCustom: (id: string) => void;
 }
 
@@ -55,6 +57,10 @@ export function PresetBar({
   // editing: null = closed, 'new' = adding, otherwise the id being edited.
   const [editing, setEditing] = useState<string | null>(null);
   const [draft, setDraft] = useState('');
+  const [draftName, setDraftName] = useState('');
+  // The 从库导入 picker under the editor.
+  const [libOpen, setLibOpen] = useState(false);
+  const [libFilter, setLibFilter] = useState('');
   // Which categories are expanded past two rows (by group id).
   const [openGroups, setOpenGroups] = useState<Set<string>>(() => new Set());
 
@@ -69,27 +75,55 @@ export function PresetBar({
   function openNew() {
     setEditing('new');
     setDraft('');
+    setDraftName('');
+    setLibOpen(false);
+    setLibFilter('');
   }
   function openEdit(option: PresetOption) {
     setEditing(option.id);
     setDraft(option.text);
+    setDraftName(option.name);
+    setLibOpen(false);
+    setLibFilter('');
   }
   function close() {
     setEditing(null);
     setDraft('');
+    setDraftName('');
+    setLibOpen(false);
+    setLibFilter('');
   }
   function commitNew(persist: boolean) {
     const text = draft.trim();
     if (!text) return;
-    onAddCustom(text, persist);
+    onAddCustom(draftName.trim(), text, persist);
     close();
   }
   function commitEdit(id: string) {
     const text = draft.trim();
     if (!text) return;
-    onUpdateCustom(id, text);
+    onUpdateCustom(id, draftName.trim(), text);
     close();
   }
+  function importEntry(entry: PromptLibraryEntry) {
+    setDraftName(entry.name);
+    setDraft(entry.text);
+    setLibOpen(false);
+  }
+
+  // Library entries grouped by category, filtered by the picker's search box.
+  const libGroups = useMemo(() => {
+    const q = libFilter.trim().toLowerCase();
+    const match = (e: PromptLibraryEntry) =>
+      !q ||
+      e.name.toLowerCase().includes(q) ||
+      e.text.toLowerCase().includes(q) ||
+      e.category.toLowerCase().includes(q);
+    return PROMPT_LIBRARY_CATEGORIES.map((category) => ({
+      category,
+      entries: PROMPT_LIBRARY.filter((e) => e.category === category && match(e)),
+    })).filter((g) => g.entries.length > 0);
+  }, [libFilter]);
 
   return (
     <div className="preset-bar">
@@ -183,16 +217,32 @@ export function PresetBar({
 
             {isExtras && editing !== null && (
               <div className="custom-editor">
+                <input
+                  className="input custom-name"
+                  maxLength={24}
+                  placeholder="起个名字（可选，留空自动取）"
+                  value={draftName}
+                  onChange={(e) => setDraftName(e.target.value)}
+                />
                 <textarea
                   className="input custom-input"
                   autoFocus
-                  rows={2}
-                  maxLength={1000}
-                  placeholder="写一条要求，会原样拼进消息里，例如：请标注每条结论对应材料里的哪一段"
+                  rows={3}
+                  maxLength={4000}
+                  placeholder="写一条要求，会原样拼进消息里；或点「从库导入」挑一个现成的详细提示词再改。"
                   value={draft}
                   onChange={(e) => setDraft(e.target.value)}
                 />
                 <div className="custom-editor-actions">
+                  <button
+                    className="chip-btn tiny lib-open-btn"
+                    onClick={() => setLibOpen((v) => !v)}
+                    aria-expanded={libOpen}
+                    title="从内置提示词库挑一个填进来"
+                  >
+                    从库导入 <Chevron open={libOpen} />
+                  </button>
+                  <div className="spacer" />
                   {editing === 'new' ? (
                     <>
                       <button
@@ -225,6 +275,44 @@ export function PresetBar({
                     取消
                   </button>
                 </div>
+
+                {libOpen && (
+                  <div className="lib-picker">
+                    <input
+                      className="input lib-search"
+                      type="search"
+                      placeholder="搜提示词…"
+                      value={libFilter}
+                      onChange={(e) => setLibFilter(e.target.value)}
+                    />
+                    <div className="lib-list">
+                      {libGroups.map(({ category, entries }) => (
+                        <div key={category} className="lib-cat">
+                          <div className="lib-cat-label">{category}</div>
+                          {entries.map((entry) => (
+                            <button
+                              key={entry.id}
+                              className="lib-item"
+                              title={entry.text}
+                              onClick={() => importEntry(entry)}
+                            >
+                              <span className="lib-item-name">{entry.name}</span>
+                              {entry.source && (
+                                <span className="lib-item-src">{entry.source}</span>
+                              )}
+                            </button>
+                          ))}
+                        </div>
+                      ))}
+                      {libGroups.length === 0 && (
+                        <p className="muted tiny lib-empty">没有匹配的提示词。</p>
+                      )}
+                    </div>
+                    <p className="hint tiny lib-note">
+                      选一条填进上面，可再改名 / 编辑；部分改编自 Fabric（MIT）。
+                    </p>
+                  </div>
+                )}
               </div>
             )}
           </div>

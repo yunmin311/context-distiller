@@ -319,10 +319,16 @@ export function App() {
                 customExtras={state.customExtras}
                 onSetSingle={actions.setSingle}
                 onToggleExtra={actions.toggleExtra}
-                onAddCustom={(text, persist) =>
-                  actions.addCustomExtra(chipLabel(text), text, persist ? 'persist' : 'session')
+                onAddCustom={(name, text, persist) =>
+                  actions.addCustomExtra(
+                    name.trim() || chipLabel(text),
+                    text,
+                    persist ? 'persist' : 'session',
+                  )
                 }
-                onUpdateCustom={(id, text) => actions.updateCustomExtra(id, chipLabel(text), text)}
+                onUpdateCustom={(id, name, text) =>
+                  actions.updateCustomExtra(id, name.trim() || chipLabel(text), text)
+                }
                 onRemoveCustom={actions.removeCustomExtra}
               />
             </section>
