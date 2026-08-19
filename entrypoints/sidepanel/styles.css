@@ -24,6 +24,25 @@
   --sel-ink: #ffffff;
   --danger: #dc2626;
 
+  /* Frosted-glass surfaces (Apple-style / like ChatGPT's scroll-to-bottom button):
+     a translucent tint + a backdrop blur + a hairline edge, rather than a solid
+     block of accent. The accent tokens are borrowed from ChatGPT and DESATURATED
+     before use (see the theme sync), so these read as material, not paint. */
+  --glass-bg: rgba(255, 255, 255, 0.62);
+  --glass-bg-hover: rgba(255, 255, 255, 0.82);
+  --glass-line: rgba(13, 13, 13, 0.1);
+  --glass-blur: saturate(150%) blur(14px);
+  --glass-shadow: 0 1px 2px rgba(13, 13, 13, 0.06), 0 4px 14px rgba(13, 13, 13, 0.07);
+  /* Accent-tinted glass, used for the primary action + selected states.
+     Declared twice: the plain values are the fallback for a browser without
+     color-mix (Chrome < 111), which then simply gets untinted glass. */
+  --glass-accent: rgba(255, 255, 255, 0.6);
+  --glass-accent-hover: rgba(255, 255, 255, 0.75);
+  --glass-accent-line: rgba(13, 13, 13, 0.14);
+  --glass-accent: color-mix(in srgb, var(--accent) 16%, rgba(255, 255, 255, 0.6));
+  --glass-accent-hover: color-mix(in srgb, var(--accent) 26%, rgba(255, 255, 255, 0.7));
+  --glass-accent-line: color-mix(in srgb, var(--accent) 34%, transparent);
+
   --radius: 12px;
   --radius-sm: 9px;
   --shadow-pop: 0 4px 18px rgba(13, 13, 13, 0.16);
@@ -56,6 +75,16 @@
     --sel-ink: #18181b;
     --danger: #f26b60;
     --shadow-pop: 0 6px 22px rgba(0, 0, 0, 0.55);
+    --glass-bg: rgba(60, 60, 66, 0.5);
+    --glass-bg-hover: rgba(78, 78, 86, 0.66);
+    --glass-line: rgba(255, 255, 255, 0.12);
+    --glass-shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 4px 16px rgba(0, 0, 0, 0.36);
+    --glass-accent: rgba(60, 60, 66, 0.5);
+    --glass-accent-hover: rgba(70, 70, 78, 0.62);
+    --glass-accent-line: rgba(255, 255, 255, 0.18);
+    --glass-accent: color-mix(in srgb, var(--accent) 20%, rgba(60, 60, 66, 0.5));
+    --glass-accent-hover: color-mix(in srgb, var(--accent) 32%, rgba(70, 70, 78, 0.6));
+    --glass-accent-line: color-mix(in srgb, var(--accent) 42%, transparent);
   }
 }
 :root[data-theme='dark'] {
@@ -355,20 +384,30 @@ body {
   opacity: 0.38;
   cursor: not-allowed;
 }
+/* Primary action — frosted glass tinted with ChatGPT's (desaturated) accent,
+   like its scroll-to-bottom button: material, not a solid slab of color. */
 .btn-primary {
-  background: var(--sel);
-  color: var(--sel-ink);
+  background: var(--glass-accent);
+  border-color: var(--glass-accent-line);
+  color: var(--ink);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  box-shadow: var(--glass-shadow);
 }
 .btn-primary:hover:not(:disabled) {
-  opacity: 0.86;
+  background: var(--glass-accent-hover);
 }
+/* Secondary actions — the same glass, untinted. */
 .btn-outline {
-  background: var(--surface);
-  border-color: var(--line-2);
+  background: var(--glass-bg);
+  border-color: var(--glass-line);
   color: var(--ink);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  box-shadow: var(--glass-shadow);
 }
 .btn-outline:hover:not(:disabled) {
-  border-color: var(--ink);
+  background: var(--glass-bg-hover);
 }
 .btn-ghost {
   background: transparent;
@@ -661,9 +700,11 @@ textarea:focus,
   border-color: var(--ink-2);
 }
 .mark-filter-on {
-  background: var(--sel);
-  color: var(--sel-ink);
-  border-color: transparent;
+  background: var(--glass-accent);
+  color: var(--ink);
+  border-color: var(--glass-accent-line);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
 }
 
 .tag {
@@ -730,11 +771,13 @@ textarea:focus,
   display: flex;
   align-items: center;
   gap: 6px;
-  background: var(--sel);
-  color: var(--sel-ink);
-  border: none;
+  background: var(--glass-accent);
+  color: var(--ink);
+  border: 1px solid var(--glass-accent-line);
   border-radius: 9px;
   padding: 6px 8px;
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
   box-shadow: var(--shadow-pop);
   animation: pop-in 0.12s ease-out;
 }
@@ -755,13 +798,12 @@ textarea:focus,
   padding: 5px 8px;
   font-family: inherit;
   font-size: 12px;
-  background: rgba(255, 255, 255, 0.14);
-  color: var(--sel-ink);
+  background: var(--surface);
+  color: var(--ink);
   outline: none;
 }
 .sel-pop-note::placeholder {
-  color: var(--sel-ink);
-  opacity: 0.5;
+  color: var(--muted);
 }
 .sel-pop-add {
   flex: 0 0 auto;
@@ -773,11 +815,12 @@ textarea:focus,
   font-weight: 600;
   white-space: nowrap;
   cursor: pointer;
-  background: rgba(255, 255, 255, 0.18);
-  color: var(--sel-ink);
+  background: var(--surface);
+  border: 1px solid var(--glass-accent-line);
+  color: var(--ink);
 }
 .sel-pop-add:hover {
-  background: rgba(255, 255, 255, 0.28);
+  background: var(--hover);
 }
 @keyframes pop-in {
   from {
@@ -980,9 +1023,14 @@ textarea:focus,
   background: var(--hover);
   color: var(--ink);
 }
+/* Selected preset — accent-tinted glass with a hairline edge, so a row of chips
+   reads as material and the choice still stands out. */
 .chip-active {
-  background: var(--sel);
-  color: var(--sel-ink);
+  background: var(--glass-accent);
+  box-shadow: inset 0 0 0 1px var(--glass-accent-line);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  color: var(--ink);
   font-weight: 600;
 }
 
@@ -1001,9 +1049,10 @@ textarea:focus,
   background: transparent;
 }
 .chip-custom.chip-active {
-  background: var(--sel);
-  color: var(--sel-ink);
-  border-color: transparent;
+  background: var(--glass-accent);
+  color: var(--ink);
+  border-color: var(--glass-accent-line);
+  border-style: solid;
 }
 .chip-x {
   position: absolute;
@@ -1186,8 +1235,11 @@ textarea:focus,
   border-radius: 999px;
   font-size: 12px;
   font-weight: 600;
-  color: var(--sel-ink);
-  background: var(--sel);
+  color: var(--ink);
+  background: var(--glass-bg-hover);
+  border: 1px solid var(--glass-line);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
   box-shadow: var(--shadow-pop);
   animation: toast-in 0.14s ease-out;
 }

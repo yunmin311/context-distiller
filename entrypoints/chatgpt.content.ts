@@ -424,15 +424,27 @@ function detectChatgptAccent(theme: 'light' | 'dark'): string | null {
   return null;
 }
 
+/** Mix a color toward its own grey, so a borrowed accent reads as a soft tint. */
+function softenColor(color: string, amount: number): string | null {
+  const m = color.match(/\d+(\.\d+)?/g);
+  if (!m || m.length < 3) return null;
+  const rgb = [Number(m[0]), Number(m[1]), Number(m[2])];
+  const grey = (rgb[0]! + rgb[1]! + rgb[2]!) / 3;
+  const out = rgb.map((c) => Math.round(c + (grey - c) * amount));
+  return `rgba(${out[0]}, ${out[1]}, ${out[2]}, 0.8)`;
+}
+
 /** Non-layout highlight (outline ring + soft glow), restored after a moment.
  *  Monochrome and tinted to ChatGPT's OWN theme, so it reads as native instead of
  *  a clashing accent. Saves/restores the inline styles we touch. */
 function flashElement(el: HTMLElement): void {
   const theme = detectChatgptTheme();
   const dark = theme === 'dark';
-  // Prefer ChatGPT's own accent; fall back to a monochrome ring in its theme.
+  // Prefer ChatGPT's own accent, pulled toward grey so the ring is a soft tint
+  // rather than a saturated band; fall back to a monochrome ring in its theme.
   const accent = detectChatgptAccent(theme);
-  const ring = accent ?? (dark ? 'rgba(236, 236, 241, 0.72)' : 'rgba(32, 33, 38, 0.6)');
+  const softened = accent ? softenColor(accent, 0.55) : null;
+  const ring = softened ?? (dark ? 'rgba(236, 236, 241, 0.72)' : 'rgba(32, 33, 38, 0.6)');
   const glow = dark ? 'rgba(236, 236, 241, 0.14)' : 'rgba(32, 33, 38, 0.1)';
   const prev = {
     outline: el.style.outline,
