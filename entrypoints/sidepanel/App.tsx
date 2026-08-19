@@ -337,6 +337,7 @@ export function App() {
                 onToggleMark={actions.toggleMark}
                 onSetMarkNote={actions.setMarkNote}
                 onRemoveMark={actions.removeMark}
+                onLocate={handleLocate}
               />
             </section>
 

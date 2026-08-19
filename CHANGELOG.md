@@ -15,11 +15,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   placed after the grouped material. Held in memory only, persisted with the
   conversation solely when 「记住本次」 is on. (A separate pure-annotation "sticky
   note" that never compiles is planned as its own feature.)
-- **在对话里定位** — every fragment in the workspace gets a crosshair button that
-  scrolls the ChatGPT page to its source message and flashes a ring around it. A
-  **pure local scroll** — no request, nothing done to the account, no ban risk. A
-  message ChatGPT has virtualized out of the DOM can't be reached, so it says so
-  instead of guessing.
+- **在对话里定位** — every message in the reading list **and** every fragment in the
+  workspace gets a crosshair button that scrolls the ChatGPT page to that message
+  and flashes a ring around it. A **pure local scroll** — no request, nothing done
+  to the account, no ban risk. A message ChatGPT has virtualized out of the DOM
+  can't be reached, so it says so instead of guessing.
 - **Prompt library** — a built-in, **offline** set of ready-made "requirement"
   prompts (总结提炼 / 分析审视 / 改写润色 / 结构化 / 迁移交接) you can pull into a
   custom requirement via **从库导入**, then rename / trim / keep. Several entries
