@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.1] — 2026-08-20
+
 ### Added
 - **便签 (scratchpad)** — a single free-text annotation pad in the **top bar** (toggle
   it open beside the conversation title; a dot on the toggle signals it has
@@ -41,13 +43,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   tint rather than saturated paint. Greyscale is rejected as an accent (ChatGPT's
   primary button is monochrome), in which case the panel keeps its own neutral
   accent; the OS preference still applies when the page can't be read.
-- **Frosted-glass action pills** — 预览 / 复制 / 填入 are frosted glass: the footer
-  bar behind them is fully transparent and pinned over the message list, so the
-  pills' backdrop blur has the scrolling messages behind it to work on (Apple-style,
-  in the spirit of ChatGPT's scroll-to-bottom button). Glass is used **only** there:
-  `backdrop-filter` on an element sitting on the panel's opaque background has
-  nothing to see through and degrades into a flat grey block. Falls back to opaque
-  pills where blur isn't supported.
+- **One celadon palette across the panel.** Every button and selected state — the
+  footer's 预览 / 复制 / 填入, the in-list ＋加入 / ＋问答, selected preset chips, the
+  clickable message number — now shares a single celadon blue-grey family instead
+  of black-on-white plus a grey "primary". The three footer pills are deliberately
+  **identical** to each other. The panel keeps its own accent rather than borrowing
+  ChatGPT's: ChatGPT's UI is monochrome, so "its accent" resolved to grey and
+  tinted everything a muddy neutral. The footer bar itself stays solid.
 - **Prompt library** — a built-in, **offline** set of ready-made "requirement"
   prompts (总结提炼 / 分析审视 / 改写润色 / 结构化 / 迁移交接) you can pull into a
   custom requirement via **从库导入**, then rename / trim / keep. Several entries
@@ -196,7 +198,8 @@ to the user. Local-only — no model API, no server, no tracking, never auto-sen
   guard on the display de-Markdown pass, a wrong-tab reload guard, and
   bounds / validation on stored config.
 
-[Unreleased]: https://github.com/yunmin311/context-distiller/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/yunmin311/context-distiller/compare/v1.1.1...HEAD
+[1.1.1]: https://github.com/yunmin311/context-distiller/releases/tag/v1.1.1
 [0.5.0]: https://github.com/yunmin311/context-distiller/releases/tag/v0.5.0
 [0.4.0]: https://github.com/yunmin311/context-distiller/releases/tag/v0.4.0
 [0.3.0]: https://github.com/yunmin311/context-distiller/releases/tag/v0.3.0

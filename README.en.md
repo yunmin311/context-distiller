@@ -63,11 +63,16 @@ By design it is deliberately **quiet and blends into ChatGPT**: neutral colors, 
 ## Core features
 
 - **Full conversation reading**: a page-world bridge fetches the **entire** thread from ChatGPT's **own backend API** (same-origin, your existing session, nothing uploaded), so even very long threads read in full at once — beating ChatGPT's virtualization (only a screenful is in the DOM). It follows the active branch and skips the model's reasoning and "thinking-preview" preambles, so each turn is a clean question + answer; the mounted-DOM read is the fallback. **Opening the side panel auto-reads the conversation — no manual "read" click.** The side panel strips Markdown markers on display (`##`, `**`, `>`, …) for clean reading; the original text handed to the AI is preserved.
-- **Multi-granularity selection**: a whole message, a Q&A pair, or **highlight text inside a message** to extract that exact fragment.
-- **Temporary grouping**: five default modules ("Framework / Body / Supplement / Recap / Key sentences"), reorderable, annotatable, add/remove. A sticky selector up top switches the "add-to" target any time and creates new modules (optionally "this session / long-term").
+- **Multi-granularity selection**: a whole message, a Q&A pair, or **highlight text inside a message** to extract that exact fragment (with an optional note written right at selection time).
+- **Message marks 📌**: while reading, pin the turns that matter and jot a note; a `📌 N` chip toggles a marked-only filter. Marks **compile into their own 【标记】 section**, after the grouped material.
+- **Locate in the conversation**: click a message's **#number** (or a fragment's crosshair) and the ChatGPT page **scrolls to that message and flashes it**. A pure local scroll — no request, nothing done to your account; a message ChatGPT has virtualized away is **sought out** until it loads.
+- **Scratchpad**: a private notepad in the top bar that persists across sessions and **never compiles into the output** (the deliberate opposite of message marks).
+- **Temporary grouping**: five default modules ("Framework / Body / Supplement / Recap / Key sentences"), reorderable, annotatable, add/remove, and **editable in place**. A sticky selector up top switches the "add-to" target any time and creates new modules (optionally "this session / long-term").
+- **Built-in prompt library**: pull a ready-made requirement from an **offline** curated set (summarize / analyze / rewrite / structure / hand-off), then rename and tweak it. Several entries are adapted from [Fabric](https://github.com/danielmiessler/fabric) (MIT — see [docs/THIRD_PARTY.md](docs/THIRD_PARTY.md)). Fully offline: importing makes no network request.
 - **Preset Prompts**: output purpose / knowledge density / writing style / output structure / output format (single-select; output format includes plain text · Markdown · HTML · PDF layout) + additional requirements (multi-select, collapsible when long). Each button maps to exactly one author-maintained, versioned Prompt — **the extension does no AI processing whatsoever**. Additional requirements support **user customization** (add/edit/remove, optionally long-term). "Output format" is only an instruction telling the AI to answer in that format; the extension itself produces no files.
 - **Deterministic compilation**: a pure function concatenates in a fixed order — the same input always yields the same output; special characters and code pass through verbatim.
 - **Hand back to the conversation**: a full preview → copy or fill the ChatGPT composer, and it **never auto-sends**.
+- **Follow & theme**: the panel highlights the message you've scrolled to in ChatGPT, and mirrors ChatGPT's light/dark theme in one celadon blue-grey palette.
 
 ## How it works
 
@@ -153,8 +158,8 @@ Least privilege, least retention. It runs only on chatgpt.com / chat.openai.com,
 ## Roadmap
 
 - **MVP** ✅ ChatGPT reading, multi-granularity selection, temporary grouping, preset compilation, copy & fill
-- **Beta** ◻ virtual-list enhancements, search-to-locate, selector resilience, keyboard shortcuts, error recovery
-- **Later** ◻ Claude / Gemini adapters, more validated presets, optional user-defined presets
+- **1.1** ✅ full-thread reading via the backend API, message marks, locate-in-conversation, scratchpad, built-in prompt library, theme sync
+- **Later** ◻ Claude / Gemini adapters, keyboard shortcuts, more validated presets
 
 ## Changelog
 

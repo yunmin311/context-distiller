@@ -27,20 +27,9 @@
   --sel-ink: #ffffff;
   --danger: #dc2626;
 
-  /* Frosted glass — ONLY for surfaces that genuinely float above scrolling
-     content (the footer bar, the selection bar, the toast). `backdrop-filter`
-     blurs what is BEHIND an element, so on the panel's opaque background it has
-     nothing to see through and degrades into a flat grey block — which is exactly
-     what to avoid. Hence: strongly translucent + a real blur + a hairline edge. */
-  --glass-bg: rgba(252, 252, 253, 0.82);
-  --glass-bg-hover: rgba(255, 255, 255, 0.92);
-  --glass-line: rgba(13, 13, 13, 0.08);
-  --glass-blur: saturate(180%) blur(20px);
-  --glass-shadow: 0 1px 2px rgba(13, 13, 13, 0.05), 0 6px 20px rgba(13, 13, 13, 0.08);
-
-  /* Flat accent washes — for chips/buttons that sit ON the panel (no blur, since
-     there is nothing behind them to blur). Fallbacks precede the color-mix forms
-     for browsers without color-mix (Chrome < 111). */
+  /* Accent washes — one celadon family shared by every button and selected state,
+     top bar to footer. Plain fallbacks precede the color-mix forms for browsers
+     without color-mix (Chrome < 111). */
   --accent-ink: #2f5567;
   --accent-tint: rgba(92, 129, 148, 0.14);
   --accent-tint-strong: rgba(92, 129, 148, 0.24);
@@ -83,10 +72,6 @@
     --sel-ink: #12232b;
     --danger: #f26b60;
     --shadow-pop: 0 6px 22px rgba(0, 0, 0, 0.55);
-    --glass-bg: rgba(38, 38, 42, 0.62);
-    --glass-bg-hover: rgba(52, 52, 58, 0.78);
-    --glass-line: rgba(255, 255, 255, 0.1);
-    --glass-shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 6px 20px rgba(0, 0, 0, 0.4);
     --accent-ink: #bcd8e5;
     --accent-tint: rgba(143, 180, 198, 0.16);
     --accent-tint-strong: rgba(143, 180, 198, 0.26);
@@ -266,20 +251,10 @@ body {
   flex-direction: column;
   gap: 5px;
   padding: 6px 12px 9px;
-  /* A real, visible bar — never fully transparent. It IS the frosted surface:
-     translucent enough that messages scrolling underneath show through softly,
-     opaque enough to read against. */
-  background: var(--glass-bg);
-  backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
-  border-top: 1px solid var(--glass-line);
-}
-/* No blur support → opaque bar, so it never looks washed out. */
-@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  .app-footer {
-    background: var(--surface);
-    border-top: 1px solid var(--line);
-  }
+  /* Solid, as it was originally — no translucency, no blur. The bar is a real
+     surface the action pills sit on, not a see-through pane. */
+  background: var(--surface);
+  border-top: 1px solid var(--line);
 }
 .app-footer > .muted {
   text-align: right;
@@ -340,7 +315,7 @@ body {
 }
 .scratch-toggle:hover,
 .scratch-toggle-on {
-  color: var(--ink);
+  color: var(--accent-ink);
 }
 .scratch-dot {
   width: 5px;
@@ -419,21 +394,15 @@ body {
   opacity: 0.38;
   cursor: not-allowed;
 }
-/* 预览 / 复制 / 填入 share ONE look — same accent-tinted ground, same edge, same
-   ink. 预览 is only distinguished by a slightly stronger tint, never by a
-   different (grey) material. */
+/* 预览 / 复制 / 填入 are ONE set: identical ground, edge and ink. No "primary is
+   different" treatment — the user wants the three to read as a matched row. */
 .btn-primary,
 .btn-outline {
   background: var(--accent-tint);
   border-color: var(--accent-edge);
   color: var(--accent-ink);
 }
-.btn-primary {
-  background: var(--accent-tint-strong);
-}
-.btn-primary:hover:not(:disabled) {
-  background: var(--accent-tint-stronger);
-}
+.btn-primary:hover:not(:disabled),
 .btn-outline:hover:not(:disabled) {
   background: var(--accent-tint-strong);
 }
@@ -643,8 +612,8 @@ textarea:focus,
   transition: color 0.12s ease, background 0.12s ease;
 }
 .msg-num:hover {
-  color: var(--ink);
-  background: var(--accent-weak);
+  color: var(--accent-ink);
+  background: var(--accent-tint);
 }
 
 /* 读时标记 (reading marks) — a reading aid, never compiled into the output. */
@@ -756,10 +725,12 @@ textarea:focus,
   color: var(--ink-2);
 }
 
+/* The in-list action buttons (＋加入 / ＋问答 / 本次 / 长期 …) wear the SAME celadon
+   as the footer pills, instead of black-on-white. One family across the panel. */
 .chip-btn {
-  border: 1px solid var(--line-2);
+  border: 1px solid var(--accent-edge);
   background: transparent;
-  color: var(--muted);
+  color: var(--accent-ink);
   border-radius: 999px;
   padding: 3px 10px;
   font-family: inherit;
@@ -768,22 +739,19 @@ textarea:focus,
   transition: border-color 0.14s, color 0.14s, background 0.14s;
 }
 .chip-btn:hover {
-  border-color: var(--ink);
-  color: var(--ink);
+  background: var(--accent-tint);
 }
-/* "＋加入" stays quiet — outline, not a solid block (the plugin blends in). */
+/* "＋加入" is the same family, just filled — never a black block. */
 .chip-btn-strong {
-  border-color: var(--ink-2);
-  color: var(--ink);
+  background: var(--accent-tint);
 }
 .chip-btn-strong:hover {
-  background: var(--hover);
-  border-color: var(--ink);
-  color: var(--ink);
+  background: var(--accent-tint-strong);
 }
 .added-flag {
-  color: var(--muted);
+  color: var(--accent-ink);
   font-weight: 600;
+  opacity: 0.75;
 }
 
 /* Highlight-to-add bar — the signature interaction. Spans the panel width
