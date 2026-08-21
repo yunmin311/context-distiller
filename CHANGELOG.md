@@ -68,6 +68,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   on the message you just closed instead of stranding you far down the list.
 
 ### Fixed
+- **Locate and follow no longer fight each other.** Clicking a message number
+  scrolled the page, whose scroll event was then reported back as "the user moved
+  here", so the panel scrolled too — and during a multi-step seek the two ends
+  chased a position that was still changing, leaving both adrift. Scrolls the
+  extension performs itself are now muted for the follow push, so only real user
+  scrolling drives the highlight.
+- The locate ring in the conversation is **thinner and properly blue** (it was
+  still the old grey-teal, and heavy enough to look like damage to the page).
 - **A user turn and an AI turn can no longer look alike.** The follow highlight
   replaced a message's background outright, so whenever the page scrolled to an AI
   answer that message took on the same color as a user message. Role is now carried

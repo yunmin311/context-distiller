@@ -105,6 +105,11 @@ function setupFollow(ctx: {
   let scheduled = false;
   let lastId = '';
   const onScroll = () => {
+    // Our OWN scrolling (locate / seek) must not be reported back as "the user
+    // moved here" — that turned one click into a feedback loop: we scroll the
+    // page, the page tells the panel, the panel scrolls, and both ends chase
+    // each other until neither is anywhere near the target.
+    if (isProgrammaticScroll()) return;
     if (scheduled || ctx.isInvalid) return;
     scheduled = true;
     requestAnimationFrame(() => {
@@ -124,6 +129,22 @@ function setupFollow(ctx: {
   // Capture phase catches scrolling of ChatGPT's inner message container too.
   window.addEventListener('scroll', onScroll, true);
   ctx.onInvalidated(() => window.removeEventListener('scroll', onScroll, true));
+}
+
+/**
+ * While WE are scrolling the page (a locate, or the multi-step seek), the follow
+ * push is muted: those scrolls are not the user moving around, and reporting them
+ * makes the panel chase a position we are still changing. Held as a deadline that
+ * each programmatic scroll extends, so a whole seek stays covered.
+ */
+let programmaticScrollUntil = 0;
+
+function beginProgrammaticScroll(ms: number): void {
+  programmaticScrollUntil = Math.max(programmaticScrollUntil, Date.now() + ms);
+}
+
+function isProgrammaticScroll(): boolean {
+  return Date.now() < programmaticScrollUntil;
 }
 
 /**
@@ -307,6 +328,8 @@ async function getConversation(): Promise<PanelResponse> {
  */
 async function scrollToMessage(messageId: string, orderedIds?: string[]): Promise<PanelResponse> {
   const sel = `[data-message-id="${CSS.escape(messageId)}"]`;
+  // Mute the follow push for the whole operation (extended by each seek step).
+  beginProgrammaticScroll(2000);
   let el = document.querySelector<HTMLElement>(sel);
   if (!el && orderedIds && orderedIds.length > 0) {
     // The FIRST seek in a session often failed because the virtualizer had not
@@ -322,12 +345,14 @@ async function scrollToMessage(messageId: string, orderedIds?: string[]): Promis
   if (!el) {
     return { kind: 'scroll-result', ok: false, error: '这条当前找不到（可能刚被折叠/虚拟化），刷新页面后再试。' };
   }
+  beginProgrammaticScroll(1400);
   el.scrollIntoView({ block: 'center', behavior: 'smooth' });
   // Virtualization re-lays-out around the new position, which can nudge the target
   // off-center; re-center once it settles, then flash whatever's there now.
   const target = el;
   window.setTimeout(() => {
     const settled = document.querySelector<HTMLElement>(sel) ?? target;
+    beginProgrammaticScroll(900);
     settled.scrollIntoView({ block: 'center', behavior: 'auto' });
     flashElement(settled);
   }, 320);
@@ -430,10 +455,10 @@ function detectChatgptAccent(theme: 'light' | 'dark'): string | null {
 function flashElement(el: HTMLElement): void {
   const theme = detectChatgptTheme();
   const dark = theme === 'dark';
-  // The product's celadon blue-grey accent, matching the panel (ChatGPT's own UI
-  // is monochrome, so borrowing "its accent" would just yield grey).
-  const ring = dark ? 'rgba(143, 180, 198, 0.85)' : 'rgba(92, 129, 148, 0.85)';
-  const glow = dark ? 'rgba(143, 180, 198, 0.18)' : 'rgba(92, 129, 148, 0.14)';
+  // The product's blue accent, matching the panel. Thin: a hairline ring reads as
+  // a pointer, while a heavy band looks like a defect on someone else's page.
+  const ring = dark ? 'rgba(111, 168, 216, 0.95)' : 'rgba(61, 127, 181, 0.95)';
+  const glow = dark ? 'rgba(111, 168, 216, 0.16)' : 'rgba(61, 127, 181, 0.12)';
   const prev = {
     outline: el.style.outline,
     offset: el.style.outlineOffset,
@@ -442,10 +467,10 @@ function flashElement(el: HTMLElement): void {
     transition: el.style.transition,
   };
   el.style.transition = 'outline-color 0.25s ease, box-shadow 0.25s ease';
-  el.style.outline = `2px solid ${ring}`;
-  el.style.outlineOffset = '3px';
+  el.style.outline = `1.5px solid ${ring}`;
+  el.style.outlineOffset = '2px';
   el.style.borderRadius = '10px';
-  el.style.boxShadow = `0 0 0 5px ${glow}`;
+  el.style.boxShadow = `0 0 0 3px ${glow}`;
   window.setTimeout(() => {
     el.style.outline = prev.outline;
     el.style.outlineOffset = prev.offset;
@@ -499,6 +524,7 @@ async function seekToMessage(messageId: string, orderedIds: string[]): Promise<H
   let top = (targetOrder / Math.max(1, orderedIds.length - 1)) * hi;
 
   for (let attempt = 0; attempt < 24; attempt += 1) {
+    beginProgrammaticScroll(1200); // keep the follow push muted for this whole hunt
     container.scrollTo({ top, behavior: 'auto' });
     await wait(320);
 
