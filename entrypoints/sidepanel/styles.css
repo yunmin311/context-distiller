@@ -575,8 +575,12 @@ textarea:focus,
 }
 /* "You are here" — the message the ChatGPT page is currently scrolled to. It adds
    a ring; it must NOT swap the background, or both roles collapse to one color. */
+/* INSET, not outset: `content-visibility: auto` puts paint containment on the row,
+   which clips anything drawn outside the border box — that is why the ring kept
+   looking cut off / "not fitting". An inset ring is drawn inside the box, so it
+   hugs the rounded edge exactly and can never be clipped. */
 .msg-active {
-  --ring: 0 0 0 2px var(--accent-edge);
+  --ring: inset 0 0 0 2px var(--accent-edge);
 }
 .msg-head {
   display: flex;

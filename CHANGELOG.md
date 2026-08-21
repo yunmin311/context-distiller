@@ -25,6 +25,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   placed after the grouped material. Held in memory only, persisted with the
   conversation solely when 「记住本次」 is on. (For a pure-annotation pad that never
   compiles, see 便签 above.)
+- **Partial reads grow as you scroll** — when the full backend read isn't available
+  and the panel is showing a DOM-based (partial) read, scrolling up in ChatGPT
+  loads older turns and the panel now **re-reads quietly on its own**, so the list
+  fills in without touching refresh. After a full read this stays silent, since
+  there is nothing to add.
 - **在对话里定位** — click a message's **#N number** (it *is* the button — no extra
   icon) to scroll the ChatGPT page to that message and flash a ring around it;
   workspace fragments keep a small crosshair button for the same. A **pure local
@@ -68,6 +73,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   on the message you just closed instead of stranding you far down the list.
 
 ### Fixed
+- **Switching conversations no longer mixes their material.** The workspace kept
+  fragments from the previous thread, so a distillation could quietly contain
+  another conversation's content. A read that lands on a *different* conversation
+  now clears the selected material, marks and preset choices; a plain refresh of
+  the same thread keeps everything, and module structure is kept either way. The
+  same/different test is a pure function pinned by tests, since both failure
+  directions are damaging.
+- **The followed message hugs its block again.** The highlight ring was drawn
+  outside the border box, where the row's paint containment (from
+  `content-visibility`) clipped it — hence rings that looked cut off or misaligned.
+  It's an inset ring now, so it can't be clipped.
+- **A far jump lands on the first click.** The seek interpolated its next scroll
+  position, but the virtualizer changes `scrollHeight` underfoot, so the guess was
+  stale on arrival and the hunt oscillated — taking two or three clicks. It now
+  makes one proportional jump and then walks toward the target a screen at a time,
+  which cannot overshoot by more than one screen.
+- **Reading is faster.** The access token is cached for a few minutes, so a
+  re-read is one request instead of two (the session endpoint hits auth and was
+  the slow half of every read). An expired cached token is detected and refreshed.
 - **Locate and follow no longer fight each other.** Clicking a message number
   scrolled the page, whose scroll event was then reported back as "the user moved
   here", so the panel scrolled too — and during a multi-step seek the two ends

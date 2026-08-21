@@ -62,6 +62,25 @@ export function App() {
     return () => clearTimeout(timer);
   }, [toast]);
 
+  // A partial (DOM) read only sees what ChatGPT has mounted. When the user scrolls
+  // up and the page loads older turns, the content script says so and we quietly
+  // re-read, so the list grows on its own instead of needing a manual refresh.
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const onMsg = (msg: unknown): undefined => {
+      const m = msg as { kind?: string } | undefined;
+      if (m?.kind !== 'conversation-grew') return undefined;
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => void actions.loadConversation(true), 400);
+      return undefined;
+    };
+    browser.runtime.onMessage.addListener(onMsg);
+    return () => {
+      browser.runtime.onMessage.removeListener(onMsg);
+      if (timer) clearTimeout(timer);
+    };
+  }, [actions]);
+
   // Sync the panel's light/dark theme to ChatGPT's own, so it feels native even
   // when ChatGPT's theme differs from the OS preference. Query once on open, then
   // follow the live changes the content script pushes.

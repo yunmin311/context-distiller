@@ -69,6 +69,16 @@ export interface ActiveMessagePush {
   messageId: string;
 }
 
+/**
+ * Pushed when a PARTIAL (DOM-based) read is on screen and scrolling up has
+ * loaded more of the thread into the page, so the panel can quietly re-read and
+ * grow its list. Never sent after a full backend read — there is nothing to add.
+ */
+export interface ConversationGrewPush {
+  kind: 'conversation-grew';
+  mounted: number;
+}
+
 /** Pushed when ChatGPT's theme (light/dark or accent) changes, so the panel follows. */
 export interface ThemePush {
   kind: 'theme-change';

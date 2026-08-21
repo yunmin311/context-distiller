@@ -12,6 +12,7 @@ import {
   type MwResponse,
   type ActiveMessagePush,
   type ThemePush,
+  type ConversationGrewPush,
 } from '../lib/messaging/protocol';
 
 /**
@@ -52,8 +53,47 @@ export default defineContentScript({
 
     setupFollow(ctx);
     setupThemeSync(ctx);
+    setupGrowthWatch(ctx);
   },
 });
+
+/** Mounted-message count and completeness of the most recent read. */
+let lastReadWasPartial = false;
+let lastReadMounted = 0;
+
+/**
+ * When the panel is showing a PARTIAL (DOM) read — the fallback used when the full
+ * backend read isn't available — scrolling up loads older turns into the page.
+ * Tell the panel so it can re-read and grow its list, instead of the user having
+ * to hit refresh. After a full read there is nothing to add, so we stay silent.
+ */
+function setupGrowthWatch(ctx: {
+  isInvalid: boolean;
+  onInvalidated: (cb: () => void) => void;
+}): void {
+  let timer: number | undefined;
+  const check = () => {
+    if (ctx.isInvalid || !lastReadWasPartial) return;
+    const mounted = document.querySelectorAll('[data-message-author-role]').length;
+    if (mounted <= lastReadMounted) return;
+    lastReadMounted = mounted;
+    const msg: ConversationGrewPush = { kind: 'conversation-grew', mounted };
+    try {
+      void browser.runtime.sendMessage(msg).catch(() => {});
+    } catch {
+      // context gone between the check and the send — ignore
+    }
+  };
+  const observer = new MutationObserver(() => {
+    if (timer) clearTimeout(timer);
+    timer = window.setTimeout(check, 500); // settle before reporting
+  });
+  observer.observe(document.body, { childList: true, subtree: true });
+  ctx.onInvalidated(() => {
+    observer.disconnect();
+    if (timer) clearTimeout(timer);
+  });
+}
 
 /**
  * Tell the panel ChatGPT's light/dark theme whenever it changes, so the panel can
@@ -303,6 +343,11 @@ async function getConversation(): Promise<PanelResponse> {
     `[Context Distiller] read ${raw.length} messages via ${partial ? 'DOM (partial)' : 'API (full)'}`,
   );
 
+  // Remember what this read saw, so the growth watcher only speaks up when a
+  // partial read could actually be improved by re-reading.
+  lastReadWasPartial = partial;
+  lastReadMounted = document.querySelectorAll('[data-message-author-role]').length;
+
   const messages = normalizeMessages(raw);
   if (messages.length === 0) {
     return {
@@ -515,59 +560,52 @@ async function seekToMessage(messageId: string, orderedIds: string[]): Promise<H
   const wait = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
   const maxTop = () => Math.max(1, container.scrollHeight - container.clientHeight);
 
-  // Bracket of scroll positions known to sit BEFORE / AFTER the target. Both ends
-  // are updated from what's actually mounted, so an overshoot in either direction
-  // tightens the bracket instead of leaving a stale bound (which made the first
-  // seek wander and need several clicks).
-  let lo = 0;
-  let hi = maxTop();
-  let top = (targetOrder / Math.max(1, orderedIds.length - 1)) * hi;
-
-  for (let attempt = 0; attempt < 24; attempt += 1) {
-    beginProgrammaticScroll(1200); // keep the follow push muted for this whole hunt
-    container.scrollTo({ top, behavior: 'auto' });
-    await wait(320);
-
-    const hit = document.querySelector<HTMLElement>(sel);
-    if (hit) return hit;
-
-    const extent = maxTop(); // extent shifts as items mount / unmount
-    if (hi > extent) hi = extent;
-    const mounted = Array.from(document.querySelectorAll<HTMLElement>('[data-message-id]'))
+  const mountedOrders = (): number[] =>
+    Array.from(document.querySelectorAll<HTMLElement>('[data-message-id]'))
       .map((node) => orderOf.get(node.getAttribute('data-message-id') || ''))
       .filter((o): o is number => typeof o === 'number');
 
-    if (mounted.length === 0) {
-      top = Math.min(extent, top + container.clientHeight);
-      continue;
-    }
-    const minO = Math.min(...mounted);
-    const maxO = Math.max(...mounted);
-    const span = Math.max(1, orderedIds.length - 1);
+  // One proportional jump to get in the neighbourhood…
+  let top = (targetOrder / Math.max(1, orderedIds.length - 1)) * maxTop();
+  beginProgrammaticScroll(1500);
+  container.scrollTo({ top, behavior: 'auto' });
+  await wait(320);
+  const early = document.querySelector<HTMLElement>(sel);
+  if (early) return early;
 
-    if (targetOrder < minO) {
-      // Overshot: everything mounted is AFTER the target → this position is an
-      // upper bound. Interpolate using how far past we went, then clamp.
-      hi = Math.min(hi, top);
-      const guess = top - ((minO - targetOrder) / span) * extent - container.clientHeight * 0.5;
-      top = Math.max(lo, Math.min(hi, guess > lo ? guess : (lo + hi) / 2));
-    } else if (targetOrder > maxO) {
-      // Undershot: everything mounted is BEFORE the target → lower bound.
-      lo = Math.max(lo, top);
-      const guess = top + ((targetOrder - maxO) / span) * extent + container.clientHeight * 0.5;
-      top = Math.min(hi, Math.max(lo, guess < hi ? guess : (lo + hi) / 2));
+  // …then WALK toward it a screen at a time. Interpolating a second guess made the
+  // hunt oscillate — the virtualizer changes scrollHeight underfoot, so a computed
+  // position is stale by the time it applies. Stepping can't overshoot by more than
+  // one screen, which is why this lands on the first click instead of the third.
+  const step = Math.max(200, container.clientHeight * 0.8);
+  for (let attempt = 0; attempt < 40; attempt += 1) {
+    const mounted = mountedOrders();
+    let dir = 0;
+    if (mounted.length === 0) {
+      dir = 1;
+    } else if (targetOrder < Math.min(...mounted)) {
+      dir = -1; // target is above what's mounted
+    } else if (targetOrder > Math.max(...mounted)) {
+      dir = 1; // target is below
     } else {
-      // Within the mounted band but not yet painted — give it a beat, then nudge.
-      await wait(200);
+      // Inside the mounted band but not painted yet — let it render, then nudge on.
+      await wait(220);
       const late = document.querySelector<HTMLElement>(sel);
       if (late) return late;
-      top = Math.min(hi, top + container.clientHeight * 0.4);
+      dir = 1;
     }
-    // Bracket collapsed without a hit — the extent moved under us; widen once.
-    if (hi - lo < 8) {
-      lo = 0;
-      hi = extent;
-    }
+
+    const extent = maxTop();
+    const next = Math.max(0, Math.min(extent, top + dir * step));
+    if (next === top) break; // pinned at an end and still nothing — give up cleanly
+    top = next;
+
+    beginProgrammaticScroll(1200); // keep the follow push muted for the whole hunt
+    container.scrollTo({ top, behavior: 'auto' });
+    await wait(260);
+
+    const hit = document.querySelector<HTMLElement>(sel);
+    if (hit) return hit;
   }
   return document.querySelector<HTMLElement>(sel);
 }

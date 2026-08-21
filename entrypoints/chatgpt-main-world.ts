@@ -121,6 +121,23 @@ export default defineUnlistedScript(() => {
   }
 
   /**
+   * The session endpoint is the slow half of a read (it hits auth, not a cache),
+   * and it was re-fetched on every refresh. Hold the token for a few minutes so a
+   * re-read is ONE request instead of two. A stale token just means the next
+   * conversation fetch 401s, and the retry re-fetches it.
+   */
+  let tokenCache: { value: string; until: number } | null = null;
+
+  async function getAccessToken(): Promise<string> {
+    if (tokenCache && Date.now() < tokenCache.until) return tokenCache.value;
+    const session = await fetchJsonRetry('/api/auth/session', { credentials: 'include' }, 2, 7000);
+    const token: string | undefined = session?.accessToken;
+    if (!token) throw new Error('session returned no accessToken (are you logged in?)');
+    tokenCache = { value: token, until: Date.now() + 4 * 60 * 1000 };
+    return token;
+  }
+
+  /**
    * Fetch the COMPLETE conversation from ChatGPT's own backend. This runs in the
    * PAGE world, so the same-origin session auth works exactly like the site's own
    * requests (a content-script fetch in the isolated world can't reliably
@@ -134,17 +151,25 @@ export default defineUnlistedScript(() => {
     const convId = location.pathname.match(/\/c\/([\w-]+)/)?.[1];
     if (!convId) throw new Error('no conversation id in URL (not on a /c/ page)');
 
-    const session = await fetchJsonRetry('/api/auth/session', { credentials: 'include' }, 2, 7000);
-    const token: string | undefined = session?.accessToken;
-    if (!token) throw new Error('session returned no accessToken (are you logged in?)');
+    const token = await getAccessToken();
 
     // The big one — give each try up to 15s (a huge thread's JSON is large), two tries.
-    const conv = await fetchJsonRetry(
-      `/backend-api/conversation/${convId}`,
-      { headers: { Authorization: `Bearer ${token}` }, credentials: 'include' },
-      2,
-      15000,
-    );
+    const load = (t: string) =>
+      fetchJsonRetry(
+        `/backend-api/conversation/${convId}`,
+        { headers: { Authorization: `Bearer ${t}` }, credentials: 'include' },
+        2,
+        15000,
+      );
+    let conv: any;
+    try {
+      conv = await load(token);
+    } catch (err) {
+      // Most likely a cached token that expired — drop it and try once with a fresh one.
+      tokenCache = null;
+      conv = await load(await getAccessToken());
+      void err;
+    }
     const mapping = conv?.mapping;
     if (!mapping || typeof mapping !== 'object') throw new Error('conversation had no mapping');
 

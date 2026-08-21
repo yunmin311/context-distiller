@@ -10,6 +10,7 @@ import type {
   PromptSelections,
 } from '../../lib/core/types';
 import { createId } from '../../lib/utils/id';
+import { conversationKey } from '../../lib/utils/conversation-key';
 import { reloadActiveTab, sendToActiveTab } from './messaging';
 import { loadPrefs, savePrefs, type Prefs } from './prefs';
 import { loadSession, saveSession, clearSession, type SessionSnapshot } from './session';
@@ -151,6 +152,13 @@ function reducer(state: DistillerState, action: Action): DistillerState {
       for (const [id, note] of Object.entries(state.marks)) {
         if (ids.has(id)) marks[id] = note;
       }
+      // Switching to a DIFFERENT conversation must not carry the previous one's
+      // material into the workspace — that silently mixed two threads. Module
+      // structure (including long-term modules) is kept; only fragments are
+      // dropped, and only when the conversation actually changed.
+      const switched =
+        !!state.conversation &&
+        conversationKey(state.conversation.url) !== conversationKey(action.conversation.url);
       return {
         ...state,
         status: 'ready',
@@ -159,7 +167,9 @@ function reducer(state: DistillerState, action: Action): DistillerState {
         messages: action.messages,
         partial: action.partial,
         source: action.source,
-        marks,
+        marks: switched ? {} : marks,
+        groups: switched ? state.groups.map((g) => ({ ...g, fragments: [] })) : state.groups,
+        selections: switched ? emptySelections() : state.selections,
       };
     }
 
