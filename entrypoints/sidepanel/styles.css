@@ -544,32 +544,39 @@ textarea:focus,
   flex-direction: column;
   gap: 7px;
 }
+/* Role is carried by BOTH a ground and a left rail, so a user turn and an AI turn
+   never read alike — including while one of them is the active (followed) row.
+   The rail is an INSET SHADOW, not a thick border: a 3px border is mitred against
+   the 12px radius and reads as not quite fitting, while an inset shadow follows
+   the rounded edge exactly. Rail and ring compose through custom properties so
+   the active state can add its ring without dropping the role rail. */
 .msg {
   border-radius: var(--radius);
   padding: 9px 11px;
+  --rail: transparent;
+  --ring: 0 0 #0000;
+  box-shadow: inset 3px 0 0 var(--rail), var(--ring);
+  transition: box-shadow 0.15s ease;
   /* Skip rendering off-screen messages so a long conversation (dozens of long
      turns) paints fast even on a low-end machine — virtual-list-like, no JS.
      `auto` lets the browser remember each row's real height after first paint. */
   content-visibility: auto;
   contain-intrinsic-size: auto 96px;
 }
-/* Role is carried by BOTH a ground and a left rail, so a user turn and an AI turn
-   never read alike — including while one of them is the active (followed) row. */
 .msg-user {
+  --rail: var(--user-rail);
   background: var(--user-bg);
   border: 1px solid var(--user-line);
-  border-left: 3px solid var(--user-rail);
 }
 .msg-assistant {
+  --rail: var(--accent);
   background: var(--surface);
   border: 1px solid var(--line);
-  border-left: 3px solid var(--accent);
 }
 /* "You are here" — the message the ChatGPT page is currently scrolled to. It adds
    a ring; it must NOT swap the background, or both roles collapse to one color. */
 .msg-active {
-  box-shadow: 0 0 0 2px var(--accent-edge);
-  transition: box-shadow 0.15s ease;
+  --ring: 0 0 0 2px var(--accent-edge);
 }
 .msg-head {
   display: flex;
