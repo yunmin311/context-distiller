@@ -100,14 +100,17 @@ export function App() {
   // returns to the intro rather than throwing up an error screen.
   const handleLoad = useCallback(
     async (silent = false) => {
-      let res = await actions.loadConversation();
-      // The first read right after the panel opens often lands before the page's
-      // content script is listening (or before ChatGPT has rendered a conversation),
-      // which is why it used to take a second click. Retry a couple of times with a
-      // short backoff before reporting anything.
-      for (let attempt = 0; !res.ok && attempt < 3; attempt += 1) {
-        await new Promise<void>((r) => setTimeout(r, 500 + attempt * 500));
-        res = await actions.loadConversation();
+      // A read can land before the page's content script is listening, or while a
+      // heavy conversation is still rendering. Keep RETRYING QUIETLY (the panel
+      // stays in its loading state) with a growing backoff — up to ~14s — instead
+      // of declaring failure the instant a busy page hasn't answered yet. Only the
+      // final attempt is allowed to surface an error.
+      const BACKOFF = [400, 700, 1200, 1800, 2500, 3500, 4000];
+      let res = await actions.loadConversation(true);
+      for (let attempt = 0; !res.ok && attempt < BACKOFF.length; attempt += 1) {
+        await new Promise<void>((r) => setTimeout(r, BACKOFF[attempt]));
+        const last = attempt === BACKOFF.length - 1;
+        res = await actions.loadConversation(!last);
       }
       if (res.ok) {
         setToast({

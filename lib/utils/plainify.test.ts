@@ -22,6 +22,23 @@ describe('plainify', () => {
     expect(out).toContain('const a = 1;');
   });
 
+  it('renders a markdown table readably: no separator row, no outer rails', () => {
+    const md = '| 方案 | 代价 |\n| --- | :---: |\n| A | 低 |\n| B | 高 |';
+    const out = plainify(md);
+    expect(out).not.toMatch(/^\s*\|/m); // no leading rail on any line
+    expect(out).not.toContain('---');
+    expect(out).toContain('方案');
+    expect(out).toContain('代价');
+    expect(out).toContain('A');
+    expect(out).toContain('低');
+  });
+
+  it('drops horizontal rules, which carry nothing as plain text', () => {
+    const out = plainify('上半段\n\n---\n\n下半段');
+    expect(out).toBe('上半段\n\n下半段');
+    expect(plainify('一\n\n***\n\n二')).toBe('一\n\n二');
+  });
+
   it('leaves plain text untouched and handles empty input', () => {
     expect(plainify('普通一句话。')).toBe('普通一句话。');
     expect(plainify('')).toBe('');

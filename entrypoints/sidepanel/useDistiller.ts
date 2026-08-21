@@ -500,9 +500,17 @@ export function useDistiller() {
     state.marks,
   ]);
 
-  /** Outcome of a load, returned so the caller can show a transient hint. */
+  /**
+   * Outcome of a load, returned so the caller can show a transient hint.
+   *
+   * `quiet` keeps the panel in its loading state on failure instead of flipping to
+   * the error screen — used for every attempt but the last, so a slow / still-
+   * loading page doesn't flash "读取失败" while we're patiently retrying.
+   */
   const loadConversation = useCallback(
-    async (): Promise<{ ok: boolean; count: number; partial: boolean }> => {
+    async (
+      quiet = false,
+    ): Promise<{ ok: boolean; count: number; partial: boolean; error?: string }> => {
       dispatch({ type: 'load-start' });
       const res = await sendToActiveTab({ kind: 'get-conversation' });
       if (res.kind === 'conversation' && res.ok) {
@@ -521,8 +529,8 @@ export function useDistiller() {
           : res.kind === 'error'
             ? res.error
             : '读取对话失败。';
-      dispatch({ type: 'load-error', error });
-      return { ok: false, count: 0, partial: false };
+      if (!quiet) dispatch({ type: 'load-error', error });
+      return { ok: false, count: 0, partial: false, error };
     },
     [],
   );

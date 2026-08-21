@@ -43,7 +43,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   tint rather than saturated paint. Greyscale is rejected as an accent (ChatGPT's
   primary button is monochrome), in which case the panel keeps its own neutral
   accent; the OS preference still applies when the page can't be read.
-- **One celadon palette across the panel.** Every button and selected state — the
+- **One blue palette across the panel.** Every button and selected state — the
   footer's 预览 / 复制 / 填入, the in-list ＋加入 / ＋问答, selected preset chips, the
   clickable message number — now shares a single celadon blue-grey family instead
   of black-on-white plus a grey "primary". The three footer pills are deliberately
@@ -68,6 +68,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   on the message you just closed instead of stranding you far down the list.
 
 ### Fixed
+- **A user turn and an AI turn can no longer look alike.** The follow highlight
+  replaced a message's background outright, so whenever the page scrolled to an AI
+  answer that message took on the same color as a user message. Role is now carried
+  by a ground **and** a left rail (plus distinct 你 / AI tags), and the highlight
+  only adds a ring — it never repaints the ground.
+- **Refreshing no longer gives up on a slow page.** A read that landed while a
+  heavy conversation was still rendering reported "无法与页面通信" immediately. The
+  panel now stays in its loading state and retries quietly with a growing backoff
+  (up to ~14s); only the final attempt can surface an error.
+- **Text reads cleanly.** Markdown tables lose their separator row and outer rails
+  instead of showing as rows of pipes and dashes; horizontal rules (`---`, `***`)
+  are dropped rather than left as stray punctuation; and long unbroken strings
+  (URLs, tokens, base64) now wrap instead of overflowing the panel.
 - **Reading no longer needs a second try.** The first read fires as the panel
   opens, which could land before the page's content script was listening (or
   before ChatGPT had rendered the conversation) — it failed quietly and you had to

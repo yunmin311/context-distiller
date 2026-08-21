@@ -48,8 +48,24 @@ export function plainify(md: string): string {
   return out;
 }
 
+/**
+ * A horizontal rule (`---` / `***` / `___`). Bounded to ~50 repeats on purpose:
+ * a real rule is a handful of characters, and an unbounded `\1{2,}` next to `\s*`
+ * is a catastrophic-backtracking shape. A pathological 200k-character run of one
+ * delimiter is therefore treated as content, not as a rule — which is right: it
+ * isn't formatting, and dropping it would silently eat the message.
+ */
+const HR_LINE = /^\s{0,3}([-*_])\1{2,50}\s*$/;
+/** A table's separator row: `| --- | :--: |`. */
+const TABLE_SEP_LINE = /^\s*\|?[\s:|-]*-[\s:|-]*\|[\s:|-]*$/;
+
 function strip(md: string): string {
-  let out = md;
+  // Drop rules / table separators FIRST: the inline passes below would rewrite
+  // `***` into `*`, after which it no longer looks like a rule at all.
+  let out = md
+    .split('\n')
+    .filter((line) => !HR_LINE.test(line) && !TABLE_SEP_LINE.test(line))
+    .join('\n');
 
   if (md.length <= INLINE_STRIP_LIMIT) {
     // images ![alt](url) → alt, links [text](url) → text
@@ -71,7 +87,14 @@ function strip(md: string): string {
       line
         .replace(/^\s{0,3}#{1,6}\s+/, '') // # headings
         .replace(/^\s{0,3}>\s?/, '') // > blockquote
-        .replace(/^(\s*)[-*+]\s+/, '$1• '), // - * + bullets → •
+        .replace(/^(\s*)[-*+]\s+/, '$1• ') // - * + bullets → •
+        // A table row reads better without its outer rails: "| a | b |" → "a | b".
+        .replace(/^\s*\|(.+)\|\s*$/, (_m, inner: string) =>
+          inner
+            .split('|')
+            .map((cell) => cell.trim())
+            .join('  |  '),
+        ),
     )
     .join('\n')
     // collapse 3+ blank lines the stripping may leave behind

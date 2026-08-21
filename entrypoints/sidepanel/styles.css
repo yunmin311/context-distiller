@@ -17,24 +17,27 @@
   --faint: #a6a6ae;
   --line: #eaeaee;
   --line-2: #dcdce2;
-  /* Celadon blue-grey — the product's OWN accent. It is not borrowed from the
-     page by default: ChatGPT's UI is monochrome, so borrowing yielded grey and
-     tinted the whole panel a muddy neutral. */
-  --accent: #5c8194;
-  --accent-weak: rgba(92, 129, 148, 0.1);
-  --focus: #5c8194;
-  --sel: #4e7183;
+  /* The product's OWN accent — a clear blue (not borrowed from the page: ChatGPT's
+     UI is monochrome, so borrowing yielded grey and muddied everything). */
+  --accent: #3d7fb5;
+  --accent-weak: rgba(61, 127, 181, 0.1);
+  --focus: #3d7fb5;
+  --sel: #33709f;
   --sel-ink: #ffffff;
+  /* User turns get their own warm-neutral ground so the two roles never collide. */
+  --user-bg: #f2f2f5;
+  --user-line: #e4e4ea;
+  --user-rail: #c3c3cd;
   --danger: #dc2626;
 
   /* Accent washes — one celadon family shared by every button and selected state,
      top bar to footer. Plain fallbacks precede the color-mix forms for browsers
      without color-mix (Chrome < 111). */
-  --accent-ink: #2f5567;
-  --accent-tint: rgba(92, 129, 148, 0.14);
-  --accent-tint-strong: rgba(92, 129, 148, 0.24);
-  --accent-tint-stronger: rgba(92, 129, 148, 0.34);
-  --accent-edge: rgba(92, 129, 148, 0.4);
+  --accent-ink: #23597f;
+  --accent-tint: rgba(61, 127, 181, 0.13);
+  --accent-tint-strong: rgba(61, 127, 181, 0.22);
+  --accent-tint-stronger: rgba(61, 127, 181, 0.32);
+  --accent-edge: rgba(61, 127, 181, 0.4);
   --accent-tint: color-mix(in srgb, var(--accent) 14%, transparent);
   --accent-tint-strong: color-mix(in srgb, var(--accent) 24%, transparent);
   --accent-tint-stronger: color-mix(in srgb, var(--accent) 34%, transparent);
@@ -65,18 +68,21 @@
     --faint: #67676f;
     --line: #2b2b2e;
     --line-2: #3a3a3e;
-    --accent: #8fb4c6;
-    --accent-weak: rgba(143, 180, 198, 0.12);
-    --focus: #8fb4c6;
-    --sel: #9dc0d1;
-    --sel-ink: #12232b;
+    --accent: #6fa8d8;
+    --accent-weak: rgba(111, 168, 216, 0.12);
+    --focus: #6fa8d8;
+    --sel: #7db4e0;
+    --sel-ink: #0f2233;
+    --user-bg: #202024;
+    --user-line: #2f2f34;
+    --user-rail: #4a4a52;
     --danger: #f26b60;
     --shadow-pop: 0 6px 22px rgba(0, 0, 0, 0.55);
-    --accent-ink: #bcd8e5;
-    --accent-tint: rgba(143, 180, 198, 0.16);
-    --accent-tint-strong: rgba(143, 180, 198, 0.26);
-    --accent-tint-stronger: rgba(143, 180, 198, 0.36);
-    --accent-edge: rgba(143, 180, 198, 0.42);
+    --accent-ink: #a9cef0;
+    --accent-tint: rgba(111, 168, 216, 0.16);
+    --accent-tint-strong: rgba(111, 168, 216, 0.26);
+    --accent-tint-stronger: rgba(111, 168, 216, 0.36);
+    --accent-edge: rgba(111, 168, 216, 0.42);
     --accent-tint: color-mix(in srgb, var(--accent) 18%, transparent);
     --accent-tint-strong: color-mix(in srgb, var(--accent) 28%, transparent);
     --accent-tint-stronger: color-mix(in srgb, var(--accent) 38%, transparent);
@@ -547,18 +553,23 @@ textarea:focus,
   content-visibility: auto;
   contain-intrinsic-size: auto 96px;
 }
+/* Role is carried by BOTH a ground and a left rail, so a user turn and an AI turn
+   never read alike — including while one of them is the active (followed) row. */
 .msg-user {
-  background: var(--sunken);
+  background: var(--user-bg);
+  border: 1px solid var(--user-line);
+  border-left: 3px solid var(--user-rail);
 }
 .msg-assistant {
   background: var(--surface);
   border: 1px solid var(--line);
+  border-left: 3px solid var(--accent);
 }
-/* "You are here" — the message the ChatGPT page is currently scrolled to. */
+/* "You are here" — the message the ChatGPT page is currently scrolled to. It adds
+   a ring; it must NOT swap the background, or both roles collapse to one color. */
 .msg-active {
-  background: var(--accent-weak);
-  box-shadow: inset 3px 0 0 var(--accent);
-  transition: box-shadow 0.15s ease, background 0.15s ease;
+  box-shadow: 0 0 0 2px var(--accent-edge);
+  transition: box-shadow 0.15s ease;
 }
 .msg-head {
   display: flex;
@@ -568,7 +579,10 @@ textarea:focus,
 }
 .msg-body {
   white-space: pre-wrap;
-  word-break: break-word;
+  /* `anywhere` also breaks an unbroken URL / token / base64 blob, which
+     `break-word` alone lets overflow the panel. */
+  overflow-wrap: anywhere;
+  word-break: normal;
   font-size: 13px;
   line-height: 1.6;
   color: var(--ink);
@@ -718,11 +732,14 @@ textarea:focus,
   min-width: 18px;
   font-size: 9.5px;
 }
+/* 你 vs AI — different weight AND different color, readable at a glance. */
 .tag-user {
   color: var(--muted);
+  background: var(--user-line);
 }
 .tag-assistant {
-  color: var(--ink-2);
+  color: var(--accent-ink);
+  background: var(--accent-tint);
 }
 
 /* The in-list action buttons (＋加入 / ＋问答 / 本次 / 长期 …) wear the SAME celadon
@@ -882,7 +899,8 @@ textarea:focus,
 }
 .frag-text {
   white-space: pre-wrap;
-  word-break: break-word;
+  overflow-wrap: anywhere;
+  word-break: normal;
   font-size: 12px;
   line-height: 1.5;
   max-height: 4.6em;
@@ -1201,7 +1219,8 @@ textarea:focus,
   font-size: 12px;
   line-height: 1.6;
   white-space: pre-wrap;
-  word-break: break-word;
+  overflow-wrap: anywhere;
+  word-break: normal;
   border-radius: var(--radius);
   padding: 11px;
 }
