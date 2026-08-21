@@ -22,19 +22,20 @@ Before you hand material to the AI, it hands the **choice of what, the way it's 
 
 <div align="center">
 
-<img src="docs/screenshots/messages.png" width="800" alt="Context Distiller docked next to a real ChatGPT conversation, reading it and selecting material" />
+<img src="docs/screenshots/messages.png" width="820" alt="Context Distiller docked next to a real ChatGPT conversation, reading it and selecting material" />
 
-<sub>Real screenshot · docked beside a ChatGPT conversation, reading the current thread · select by highlight / whole message (the side panel strips Markdown markers for clean reading)</sub>
+<sub>Real screenshot · docked beside a ChatGPT conversation, reading the current thread automatically · select a whole message, a Q&amp;A pair, or a highlight<br />
+(a left rail tells you apart from the AI; the panel strips Markdown markers for clean reading)</sub>
 
 <br /><br />
 
-<img src="docs/screenshots/workspace.png" width="212" alt="All preset Prompts at a glance: purpose / density / style / structure / format + extras" />
-&nbsp;&nbsp;
-<img src="docs/screenshots/preview.png" width="212" alt="Preview of the deterministically compiled full prompt" />
+<img src="docs/screenshots/workspace.png" width="248" alt="All preset Prompts at a glance: purpose / density / style / structure / format + extras" />
+&nbsp;&nbsp;&nbsp;
+<img src="docs/screenshots/preview.png" width="248" alt="Preview of the deterministically compiled full prompt" />
 
 <br />
 
-<sub>All preset Prompts at a glance (purpose / density / style / structure / format + extras)&nbsp;&nbsp;·&nbsp;&nbsp;preview of the deterministically compiled prompt (keeps the original Markdown)</sub>
+<sub>All preset Prompts at a glance (purpose / density / style / structure / format + extras)&nbsp;&nbsp;·&nbsp;&nbsp;preview of the deterministically compiled prompt (keeps the original Markdown, never auto-sends)</sub>
 
 </div>
 

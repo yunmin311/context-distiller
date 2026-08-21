@@ -22,19 +22,20 @@
 
 <div align="center">
 
-<img src="docs/screenshots/messages.png" width="800" alt="Context Distiller 停靠在真实 ChatGPT 对话旁，读取当前对话并选材" />
+<img src="docs/screenshots/messages.png" width="820" alt="Context Distiller 停靠在真实 ChatGPT 对话旁，读取当前对话并选材" />
 
-<sub>真实运行截图 · 停靠在 ChatGPT 对话旁读取当前对话 · 划词 / 整条选材（侧边栏自动去除 Markdown 标记，阅读干净）</sub>
+<sub>真实运行截图 · 停靠在 ChatGPT 对话旁自动读取当前对话 · 整条 / 问答 / 划词选材<br />
+（左侧色条区分你与 AI；侧边栏自动去除 Markdown 标记，阅读干净）</sub>
 
 <br /><br />
 
-<img src="docs/screenshots/workspace.png" width="212" alt="预设 Prompt 全景：用途 / 密度 / 文风 / 结构 / 格式 + 附加要求" />
-&nbsp;&nbsp;
-<img src="docs/screenshots/preview.png" width="212" alt="预览「确定性编译」出的完整提示词" />
+<img src="docs/screenshots/workspace.png" width="248" alt="预设 Prompt 全景：用途 / 密度 / 文风 / 结构 / 格式 + 附加要求" />
+&nbsp;&nbsp;&nbsp;
+<img src="docs/screenshots/preview.png" width="248" alt="预览「确定性编译」出的完整提示词" />
 
 <br />
 
-<sub>全部预设一览（用途 / 密度 / 文风 / 结构 / 格式 + 附加要求）&nbsp;&nbsp;·&nbsp;&nbsp;预览确定性编译出的完整提示词（保留原始 Markdown）</sub>
+<sub>全部预设一览（用途 / 密度 / 文风 / 结构 / 格式 + 附加要求）&nbsp;&nbsp;·&nbsp;&nbsp;预览确定性编译出的完整提示词（保留原始 Markdown，绝不自动发送）</sub>
 
 </div>
 
