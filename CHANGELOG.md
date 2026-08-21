@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [1.1.1] — 2026-08-20
+## [1.1.2] — 2026-08-21
 
 ### Added
 - **便签 (scratchpad)** — a single free-text annotation pad in the **top bar** (toggle
@@ -243,8 +243,8 @@ to the user. Local-only — no model API, no server, no tracking, never auto-sen
   guard on the display de-Markdown pass, a wrong-tab reload guard, and
   bounds / validation on stored config.
 
-[Unreleased]: https://github.com/yunmin311/context-distiller/compare/v1.1.1...HEAD
-[1.1.1]: https://github.com/yunmin311/context-distiller/releases/tag/v1.1.1
+[Unreleased]: https://github.com/yunmin311/context-distiller/compare/v1.1.2...HEAD
+[1.1.2]: https://github.com/yunmin311/context-distiller/releases/tag/v1.1.2
 [0.5.0]: https://github.com/yunmin311/context-distiller/releases/tag/v0.5.0
 [0.4.0]: https://github.com/yunmin311/context-distiller/releases/tag/v0.4.0
 [0.3.0]: https://github.com/yunmin311/context-distiller/releases/tag/v0.3.0

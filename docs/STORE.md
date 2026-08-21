@@ -61,7 +61,7 @@ pnpm zip            # 产出 .output/context-distiller-<version>-chrome.zip
 - [x] 无远程代码：所有 JS 随包发布，无 `eval`、无外链 `<script>`（MV3 合规）。
 - [x] **仓库已公开**（2026-08-07）：隐私政策可直接用公开链接 `docs/PRIVACY.md`（见上）。
 - [ ] 另导 **1280×800** 商店截图（现有图是 README 尺寸，不合规；可从现有截图生成）。
-- [ ] 确认 `version`（`package.json`，当前 `1.1.1`）符合预期；每次更新需**递增版本号**再传。
+- [ ] 确认 `version`（`package.json`，当前 `1.1.2`）符合预期；每次更新需**递增版本号**再传。
 - [ ] （可选）manifest 加 `homepage_url` 指向公开仓库（现已公开，可加）。
 - [ ] **商店「名称」填 `Context Distiller`**——别沿用另一个项目「Window Annotator」；
   当前 GitHub Release 标题也误写成了 Window Annotator，一并改回。
