@@ -28,7 +28,7 @@ pnpm zip            # 产出 .output/context-distiller-<version>-chrome.zip
 | 截图 | **1–5 张，1280×800 或 640×400 PNG/JPG**（`docs/screenshots/` 里的图需按此尺寸重导，见下） |
 | 小宣传图（可选） | 440×280 |
 | 分类 | Productivity（生产力） |
-| 语言 | 简体中文（可加 English） |
+| 语言 | 简体中文 + English（扩展本身双语，顶栏 中 / EN 一键切换） |
 | 官网/支持 URL | 一个**公开**可访问的链接（GitHub 仓库公开后填，或单独建页） |
 
 > 截图尺寸：`docs/screenshots/` 现有的图（`messages.png` 1861×901、`workspace.png` / `preview.png`
@@ -41,7 +41,7 @@ pnpm zip            # 产出 .output/context-distiller-<version>-chrome.zip
 
 - `sidePanel`：在 ChatGPT 页面旁展示工作台侧边栏。
 - `scripting`：向页面主世界注入一个只读脚本，读取当前对话的内部数据（代码块更准）。
-- `storage`：**仅**保存用户自己的长期配置（自定义模块名 / 自定义要求文本），不含对话内容。
+- `storage`：**仅**保存用户自己的长期配置（自定义模块名 / 自定义要求文本 / 便签 / 界面语言），不含对话内容。
 - host `*://chatgpt.com/*`、`*://chat.openai.com/*`：只在 ChatGPT 页运行、读取当前对话、回填输入框。
 
 **数据用途声明**（Data usage）：勾选
@@ -61,7 +61,10 @@ pnpm zip            # 产出 .output/context-distiller-<version>-chrome.zip
 - [x] 无远程代码：所有 JS 随包发布，无 `eval`、无外链 `<script>`（MV3 合规）。
 - [x] **仓库已公开**（2026-08-07）：隐私政策可直接用公开链接 `docs/PRIVACY.md`（见上）。
 - [ ] 另导 **1280×800** 商店截图（现有图是 README 尺寸，不合规；可从现有截图生成）。
-- [ ] 确认 `version`（`package.json`，当前 `1.1.2`）符合预期；每次更新需**递增版本号**再传。
+- [ ] 确认 `version`（`package.json`，当前 `1.2.0`）符合预期；每次更新需**递增版本号**再传。
+- [x] 界面已双语（自建 i18n + 顶栏切换，**不用 `_locales`**：`chrome.i18n` 跟随浏览器界面语言、
+  扩展内切不了，中文 Chrome 的用户就永远看不到英文版）。manifest 的 `name` / `description` 本身即英文，
+  商店「详细描述」建议中英各贴一版。
 - [ ] （可选）manifest 加 `homepage_url` 指向公开仓库（现已公开，可加）。
 - [ ] **商店「名称」填 `Context Distiller`**——别沿用另一个项目「Window Annotator」；
   当前 GitHub Release 标题也误写成了 Window Annotator，一并改回。

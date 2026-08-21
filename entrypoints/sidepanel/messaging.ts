@@ -47,7 +47,7 @@ export async function reloadActiveTab(): Promise<boolean> {
 export async function sendToActiveTab(request: PanelRequest): Promise<PanelResponse> {
   const tab = await getActiveTab();
   if (!tab?.id) {
-    return { kind: 'error', error: '没有找到活动标签页。' };
+    return { kind: 'error', error: '没有找到活动标签页。', code: 'err.noActiveTab' };
   }
   try {
     const response = (await browser.tabs.sendMessage(tab.id, request)) as
@@ -57,12 +57,14 @@ export async function sendToActiveTab(request: PanelRequest): Promise<PanelRespo
       response ?? {
         kind: 'error',
         error: '页面没有响应。请在 ChatGPT 对话页打开，刷新页面后重试。',
+        code: 'err.noResponse',
       }
     );
   } catch {
     return {
       kind: 'error',
       error: '无法与页面通信。请在 ChatGPT（chatgpt.com）对话页打开侧边栏，必要时刷新页面。',
+      code: 'err.noContentScript',
     };
   }
 }

@@ -3,6 +3,7 @@ import type { ConversationMessage, FragmentGroup } from '../../../lib/core/types
 import type { ActiveMessagePush } from '../../../lib/messaging/protocol';
 import type { SelectionInput } from '../useDistiller';
 import { plainify } from '../../../lib/utils/plainify';
+import { useLang, useT, type TFn } from '../i18n';
 
 interface MessageListProps {
   messages: ConversationMessage[];
@@ -36,10 +37,10 @@ const CLAMP_CHARS = 220;
 const TOP_SAFE = 96; // topbar + conv bar — place the bar below a selection above this
 const BAR_H = 40; // approximate bar height, for vertical clamping
 
-function roleLabel(role: ConversationMessage['role']): string {
-  if (role === 'user') return '你';
-  if (role === 'assistant') return 'AI';
-  return '系统';
+function roleLabel(role: ConversationMessage['role'], t: TFn): string {
+  if (role === 'user') return t('role.user');
+  if (role === 'assistant') return t('role.assistant');
+  return t('role.system');
 }
 
 interface MessageRowProps {
@@ -85,6 +86,7 @@ const MessageRow = memo(function MessageRow({
   onRemoveMark,
   onLocate,
 }: MessageRowProps) {
+  const t = useT();
   const isLong = readable.length > CLAMP_CHARS;
   const shown = isLong && !open ? readable.slice(0, CLAMP_CHARS).trimEnd() + '…' : readable;
 
@@ -106,11 +108,11 @@ const MessageRow = memo(function MessageRow({
       data-order={message.order}
     >
       <header className="msg-head">
-        <span className={`tag tag-${message.role}`}>{roleLabel(message.role)}</span>
+        <span className={`tag tag-${message.role}`}>{roleLabel(message.role, t)}</span>
         <button
           className="msg-num"
-          title="点编号：在左侧对话里定位这条（只滚动页面，不影响账号）"
-          aria-label="在对话里定位这条"
+          title={t('msg.locate')}
+          aria-label={t('msg.locateAria')}
           onClick={() => onLocate(message.id)}
         >
           #{message.order + 1}
@@ -118,9 +120,9 @@ const MessageRow = memo(function MessageRow({
         <div className="spacer" />
         <button
           className={`mark-btn${marked ? ' mark-btn-on' : ''}`}
-          title={marked ? '取消标记' : '标记这条（会进【标记】段，一起编译）'}
+          title={t(marked ? 'msg.unmark' : 'msg.mark')}
           aria-pressed={marked}
-          aria-label={marked ? '取消标记' : '标记这条'}
+          aria-label={t(marked ? 'msg.unmark' : 'msg.markAria')}
           onClick={() => onToggleMark(message.id)}
         >
           📌
@@ -128,19 +130,19 @@ const MessageRow = memo(function MessageRow({
         {canPair && !added && (
           <button
             className="chip-btn tiny"
-            title="加入这条提问和它的下一条回答"
+            title={t('msg.addPairTip')}
             onClick={() => onAddPair(message)}
           >
-            ＋问答
+            {t('msg.addPair')}
           </button>
         )}
         {added ? (
-          <span className="added-flag tiny" title="整条已加入">
-            ✓ 已加入
+          <span className="added-flag tiny" title={t('msg.addedTip')}>
+            {t('msg.added')}
           </span>
         ) : (
           <button className="chip-btn chip-btn-strong tiny" onClick={() => onAdd(message)}>
-            ＋加入
+            {t('msg.add')}
           </button>
         )}
       </header>
@@ -177,7 +179,7 @@ const MessageRow = memo(function MessageRow({
               }
             }}
           >
-            {open ? '收起' : '展开'}
+            {t(open ? 'msg.collapse' : 'msg.expand')}
           </button>
         )}
       </div>
@@ -188,7 +190,7 @@ const MessageRow = memo(function MessageRow({
           </span>
           <input
             className="msg-note-input"
-            placeholder="标记备注（可选）"
+            placeholder={t('msg.markNote')}
             value={noteDraft}
             onChange={(e) => setNoteDraft(e.target.value)}
             onBlur={commitNote}
@@ -202,8 +204,8 @@ const MessageRow = memo(function MessageRow({
           />
           <button
             className="msg-note-x"
-            title="取消标记"
-            aria-label="取消标记"
+            title={t('msg.unmark')}
+            aria-label={t('msg.unmark')}
             onClick={() => onRemoveMark(message.id)}
           >
             ✕
@@ -231,6 +233,9 @@ export function MessageList({
   onRemoveMark,
   onLocate,
 }: MessageListProps) {
+  const t = useT();
+  // CJK corner brackets read as quotes in Chinese; English wants curly quotes.
+  const quote = useLang() === 'en' ? ['“', '”'] : ['「', '」'];
   const [filter, setFilter] = useState('');
   const [onlyMarked, setOnlyMarked] = useState(false);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -365,11 +370,11 @@ export function MessageList({
   return (
     <div className="message-list" onMouseUp={handleMouseUp}>
       <div className="list-toolbar">
-        <label className="target-pick" title="新加入的整条 / 片段会放进这个模块">
-          <span className="target-cap">加入到</span>
+        <label className="target-pick" title={t('list.targetTip')}>
+          <span className="target-cap">{t('list.target')}</span>
           <select
             className="input target-select"
-            aria-label="选择加入目标模块"
+            aria-label={t('list.targetAria')}
             value={activeGroupId}
             onChange={(e) => {
               if (e.target.value === NEW_MODULE) setCreating(true);
@@ -382,13 +387,13 @@ export function MessageList({
                 {g.fragments.length ? ` (${g.fragments.length})` : ''}
               </option>
             ))}
-            <option value={NEW_MODULE}>＋ 新建模块…</option>
+            <option value={NEW_MODULE}>{t('list.newModule')}</option>
           </select>
         </label>
         <input
           className="input filter-input"
           type="search"
-          placeholder="筛选…"
+          placeholder={t('list.filter')}
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
         />
@@ -399,7 +404,7 @@ export function MessageList({
           <button
             className={`mark-filter${onlyMarked ? ' mark-filter-on' : ''}`}
             onClick={() => setOnlyMarked((v) => !v)}
-            title={onlyMarked ? '显示全部消息' : '只看已标记的消息'}
+            title={t(onlyMarked ? 'list.showAll' : 'list.onlyMarked')}
             aria-pressed={onlyMarked}
           >
             📌 {markCount}
@@ -413,7 +418,7 @@ export function MessageList({
             className="input"
             autoFocus
             maxLength={40}
-            placeholder="新模块名称"
+            placeholder={t('list.newModuleName')}
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
             onKeyDown={(e) => {
@@ -428,17 +433,17 @@ export function MessageList({
             className="chip-btn tiny"
             disabled={!newName.trim()}
             onClick={() => createModule(false)}
-            title="只在这次有，关掉就没了"
+            title={t('list.scopeSessionTip')}
           >
-            本次
+            {t('list.scopeSession')}
           </button>
           <button
             className="chip-btn tiny"
             disabled={!newName.trim()}
             onClick={() => createModule(true)}
-            title="长期保留，下次打开还在"
+            title={t('list.scopePersistTip')}
           >
-            长期
+            {t('list.scopePersist')}
           </button>
           <button
             className="icon-btn xs"
@@ -446,17 +451,15 @@ export function MessageList({
               setNewName('');
               setCreating(false);
             }}
-            title="取消"
-            aria-label="取消新建模块"
+            title={t('list.cancel')}
+            aria-label={t('list.cancelNewModule')}
           >
             ✕
           </button>
         </div>
       )}
 
-      <p className="hint tiny">
-        整条点「＋加入」；只要其中几句 —— 直接在消息里划词，冒出来的小条里可顺手加条注释再加入。
-      </p>
+      <p className="hint tiny">{t('list.hint')}</p>
 
       {filtered.map((message) => (
         <MessageRow
@@ -481,7 +484,7 @@ export function MessageList({
 
       {messages.length > 0 && filtered.length === 0 && (
         <p className="muted tiny">
-          {onlyMarked ? '没有匹配的已标记消息。' : `没有匹配「${filter}」的消息。`}
+          {onlyMarked ? t('list.emptyMarked') : t('list.emptyFilter', { query: filter })}
         </p>
       )}
 
@@ -490,15 +493,17 @@ export function MessageList({
           className="sel-pop"
           style={{ top: popover.top }}
           role="dialog"
-          aria-label="给选中文本加注释并加入"
+          aria-label={t('sel.aria')}
         >
           <span className="sel-pop-preview" title={popover.text}>
-            「{popover.text.length > 14 ? popover.text.slice(0, 14).trim() + '…' : popover.text}」
+            {quote[0]}
+            {popover.text.length > 14 ? popover.text.slice(0, 14).trim() + '…' : popover.text}
+            {quote[1]}
           </span>
           <input
             className="sel-pop-note"
             autoFocus
-            placeholder="加条注释（可选）"
+            placeholder={t('sel.note')}
             value={selNote}
             onChange={(e) => setSelNote(e.target.value)}
             onKeyDown={(e) => {
@@ -507,7 +512,7 @@ export function MessageList({
             }}
           />
           <button className="sel-pop-add" onClick={commitSelection}>
-            ＋ 加入
+            {t('sel.add')}
           </button>
         </div>
       )}

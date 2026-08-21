@@ -74,6 +74,7 @@ By design it is deliberately **quiet and blends into ChatGPT**: neutral colors, 
 - **Deterministic compilation**: a pure function concatenates in a fixed order — the same input always yields the same output; special characters and code pass through verbatim.
 - **Hand back to the conversation**: a full preview → copy or fill the ChatGPT composer, and it **never auto-sends**.
 - **Follow & theme**: the panel highlights the message you've scrolled to in ChatGPT, and mirrors ChatGPT's light/dark theme in one celadon blue-grey palette.
+- **Chinese and English**: switch with the **中 / EN** button in the top bar; the choice is remembered. It is not just the chrome — **the compiled prompt switches too**: the base instruction, every preset Prompt, the built-in prompt library and the default module names are authored English rather than machine translations, and the section brackets and note wrapper follow (`【框架】` → `[Frame]`, `（备注：…）` → `(note: …)`). **What you wrote is never translated** — your custom requirements, fragment notes, mark notes, the modules you named and the scratchpad all compile verbatim in either language.
 
 ## How it works
 
@@ -137,6 +138,7 @@ context-distiller/
 │  └─ sidepanel/           # React side panel
 ├─ lib/                    # browser-agnostic core (unit-testable)
 │  ├─ core/                # data model · preset library · Prompt compiler ★
+│  ├─ i18n/                # zh/en string tables · language resolution
 │  ├─ platform/            # platform adapter · normalizer
 │  └─ messaging/           # three-hop messaging protocol
 └─ docs/                   # architecture / privacy / usage
@@ -150,7 +152,7 @@ context-distiller/
 pnpm test
 ```
 
-Unit tests cover the deterministic core: the Prompt compiler (determinism, fixed order, extras in library order, empty material, special-character passthrough, unknown presets skipped) and the normalizer (role detection, whitespace, dedup). The parts that depend on the real ChatGPT DOM are verified manually / with Playwright in the browser; the checklist is in [docs/USAGE.md](docs/USAGE.md).
+Unit tests cover the deterministic core: the Prompt compiler (determinism, fixed order, extras in library order, empty material, special-character passthrough, unknown presets skipped, and the same guarantees again in English), the normalizer (role detection, whitespace, dedup), and the i18n tables — the Chinese and English tables must have identical keys and identical placeholders, no English string may contain leftover Chinese, and every built-in preset and prompt-library entry must carry an English twin, so a forgotten translation fails the build instead of shipping. The parts that depend on the real ChatGPT DOM are verified manually / with Playwright in the browser; the checklist is in [docs/USAGE.md](docs/USAGE.md).
 
 ## Privacy
 
@@ -160,6 +162,7 @@ Least privilege, least retention. It runs only on chatgpt.com / chat.openai.com,
 
 - **MVP** ✅ ChatGPT reading, multi-granularity selection, temporary grouping, preset compilation, copy & fill
 - **1.1** ✅ full-thread reading via the backend API, message marks, locate-in-conversation, scratchpad, built-in prompt library, theme sync
+- **1.2** ✅ Chinese and English (the interface *and* the compiled prompt), switched from the top bar
 - **Later** ◻ Claude / Gemini adapters, keyboard shortcuts, more validated presets
 
 ## Changelog

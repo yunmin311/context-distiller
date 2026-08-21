@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { compile, compileMessage } from './compiler';
 import {
   BASE_TASK_PROMPT,
+  BASE_TASK_PROMPT_EN,
   EXTRA_PRESETS,
   getPreset,
   ALL_PRESETS,
@@ -246,5 +247,70 @@ describe('preset library integrity', () => {
         'extras',
       ]).toContain(p.group);
     }
+  });
+});
+
+describe('compiling in English', () => {
+  it('uses the English base instruction', () => {
+    const text = compileMessage([], EMPTY_SELECTIONS, { lang: 'en' });
+    expect(text).toBe(BASE_TASK_PROMPT_EN);
+    expect(text).not.toBe(BASE_TASK_PROMPT);
+  });
+
+  it("uses each preset's English wording, with the same ids and order", () => {
+    const selections: PromptSelections = {
+      ...EMPTY_SELECTIONS,
+      intent: 'intent.study',
+      density: 'density.high',
+    };
+    const zh = compile([], selections);
+    const en = compile([], selections, { lang: 'en' });
+    expect(en.usedPresetIds).toEqual(zh.usedPresetIds);
+    expect(en.text).toContain(getPreset('intent.study')!.textEn!);
+    expect(en.text).not.toContain(getPreset('intent.study')!.text);
+  });
+
+  it('brackets group headers and the marks section the English way', () => {
+    const groups = [group('Frame', 0, [frag('body text')])];
+    const en = compile(groups, EMPTY_SELECTIONS, {
+      lang: 'en',
+      marks: [{ text: 'marked turn', order: 3 }],
+    });
+    expect(en.text).toContain('[Frame]');
+    expect(en.text).toContain('[Marks]');
+    expect(en.text).not.toContain('【');
+  });
+
+  it('wraps a fragment note in English', () => {
+    const groups = [group('Frame', 0, [frag('body', { note: 'why it matters' })])];
+    const en = compile(groups, EMPTY_SELECTIONS, { lang: 'en' });
+    expect(en.text).toContain('(note: why it matters)');
+    expect(en.text).not.toContain('备注');
+  });
+
+  it("leaves a user's own custom requirement untranslated", () => {
+    const custom: PresetOption = {
+      id: 'ex_mine',
+      name: '我的',
+      group: 'extras',
+      version: 1,
+      text: '请务必保留我的原话',
+      custom: true,
+    };
+    const selections: PromptSelections = { ...EMPTY_SELECTIONS, extras: [custom.id] };
+    const en = compile([], selections, { lang: 'en', customExtras: [custom] });
+    expect(en.text).toContain('请务必保留我的原话');
+  });
+
+  it('is deterministic per language', () => {
+    const groups = [group('Frame', 0, [frag('a'), frag('b')])];
+    const selections: PromptSelections = { ...EMPTY_SELECTIONS, intent: 'intent.draft' };
+    const once = compile(groups, selections, { lang: 'en' }).text;
+    const twice = compile(groups, selections, { lang: 'en' }).text;
+    expect(once).toBe(twice);
+  });
+
+  it('defaults to Chinese when no language is given', () => {
+    expect(compileMessage([], EMPTY_SELECTIONS)).toBe(BASE_TASK_PROMPT);
   });
 });

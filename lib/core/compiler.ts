@@ -1,5 +1,6 @@
+import type { Lang } from '../i18n';
 import type { FragmentGroup, PresetOption, PromptSelections } from './types';
-import { BASE_TASK_PROMPT, EXTRA_PRESETS, getPreset } from './presets';
+import { EXTRA_PRESETS, baseTaskPrompt, getPreset, presetText } from './presets';
 
 /**
  * The Prompt Compiler.
@@ -36,7 +37,30 @@ export interface CompileOptions {
    * grouped material. Each is a whole marked message plus its optional note.
    */
   marks?: Array<{ text: string; note?: string; order: number }>;
+  /**
+   * Language of the compiled message. Selects the preset wording (`textEn`), the
+   * base instruction, the note wrapper and the section brackets. Default `zh`,
+   * so an existing caller that passes no options is unaffected. Determinism is
+   * per-language: same input + same lang → same output, always.
+   */
+  lang?: Lang;
 }
+
+/** Punctuation and wrappers that differ between the two compiled languages. */
+const FORMAT: Record<Lang, { open: string; close: string; marks: string; note: (n: string) => string }> = {
+  zh: {
+    open: '【',
+    close: '】',
+    marks: '标记',
+    note: (n) => `（备注：${n}）`,
+  },
+  en: {
+    open: '[',
+    close: ']',
+    marks: 'Marks',
+    note: (n) => `(note: ${n})`,
+  },
+};
 
 export interface CompileResult {
   /** The full plain-text message. */
@@ -70,14 +94,16 @@ export function compile(
   options: CompileOptions = {},
 ): CompileResult {
   const usedPresetIds: string[] = [];
+  const lang: Lang = options.lang ?? 'zh';
+  const fmt = FORMAT[lang];
 
   // --- 1..5: base instruction + single-select prompts -------------------
-  const instructionLines: string[] = [BASE_TASK_PROMPT];
+  const instructionLines: string[] = [baseTaskPrompt(lang)];
 
   for (const key of SINGLE_SELECT_ORDER) {
     const preset = getPreset(selections[key]);
     if (preset) {
-      instructionLines.push(preset.text);
+      instructionLines.push(presetText(preset, lang));
       usedPresetIds.push(preset.id);
     }
   }
@@ -87,7 +113,9 @@ export function compile(
   const allExtras = [...EXTRA_PRESETS, ...(options.customExtras ?? [])];
   for (const preset of allExtras) {
     if (selectedExtras.has(preset.id)) {
-      instructionLines.push(preset.text);
+      // A user's own requirement has no English twin — `presetText` falls back to
+      // what they wrote, so the extension never translates the user's words.
+      instructionLines.push(presetText(preset, lang));
       usedPresetIds.push(preset.id);
     }
   }
@@ -107,12 +135,12 @@ export function compile(
     const fragments = group.fragments ?? [];
     if (fragments.length === 0 && !includeEmptyGroups) continue;
 
-    const header = `【${group.title}】`;
+    const header = `${fmt.open}${group.title}${fmt.close}`;
     const fragmentBlocks = fragments.map((fragment) => {
       fragmentCount += 1;
       const body = fragment.text.trimEnd(); // drop trailing whitespace (was /\s+$/)
       const note = fragment.note?.trim();
-      return note ? `${body}\n（备注：${note}）` : body;
+      return note ? `${body}\n${fmt.note(note)}` : body;
     });
 
     groupBlocks.push(
@@ -126,7 +154,7 @@ export function compile(
     fragmentCount += 1;
     const body = mk.text.trimEnd();
     const note = mk.note?.trim();
-    return note ? `${body}\n（备注：${note}）` : body;
+    return note ? `${body}\n${fmt.note(note)}` : body;
   });
 
   const sections = [instructionBlock];
@@ -134,7 +162,7 @@ export function compile(
     sections.push(groupBlocks.join('\n\n'));
   }
   if (markBlocks.length > 0) {
-    sections.push(`【标记】\n${markBlocks.join('\n\n')}`);
+    sections.push(`${fmt.open}${fmt.marks}${fmt.close}\n${markBlocks.join('\n\n')}`);
   }
 
   const text = sections.join('\n\n');

@@ -270,7 +270,14 @@ async function handle(message: PanelRequest): Promise<PanelResponse> {
       }
     case 'fill-composer': {
       const ok = await chatgptAdapter.fillComposer(message.text);
-      return { kind: 'fill', ok, error: ok ? undefined : '未能写入输入框，请改用“复制完整消息”。' };
+      // The page has no idea which language the panel is showing, so failures
+      // travel as a stable code and the panel words them (see lib/i18n).
+      return {
+        kind: 'fill',
+        ok,
+        error: ok ? undefined : '未能写入输入框，请改用“复制完整消息”。',
+        code: ok ? undefined : 'err.fillFailed',
+      };
     }
     case 'scroll-to-message':
       return scrollToMessage(message.messageId, message.orderedIds);
@@ -279,7 +286,7 @@ async function handle(message: PanelRequest): Promise<PanelResponse> {
       return { kind: 'theme', theme, accent: detectChatgptAccent(theme) };
     }
     default:
-      return { kind: 'error', error: '未知请求' };
+      return { kind: 'error', error: '未知请求', code: 'err.unknownRequest' };
   }
 }
 
@@ -354,6 +361,7 @@ async function getConversation(): Promise<PanelResponse> {
       kind: 'conversation',
       ok: false,
       error: '未读取到消息。请确认已打开一个对话；超长对话可向上滚动加载后再刷新。',
+      code: 'err.noMessages',
     };
   }
 
@@ -388,7 +396,12 @@ async function scrollToMessage(messageId: string, orderedIds?: string[]): Promis
     }
   }
   if (!el) {
-    return { kind: 'scroll-result', ok: false, error: '这条当前找不到（可能刚被折叠/虚拟化），刷新页面后再试。' };
+    return {
+      kind: 'scroll-result',
+      ok: false,
+      error: '这条当前找不到（可能刚被折叠/虚拟化），刷新页面后再试。',
+      code: 'err.scrollNotFound',
+    };
   }
   beginProgrammaticScroll(1400);
   el.scrollIntoView({ block: 'center', behavior: 'smooth' });

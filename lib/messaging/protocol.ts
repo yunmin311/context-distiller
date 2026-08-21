@@ -32,6 +32,24 @@ export interface SelectionPayload {
   sourceOrder: number;
 }
 
+/**
+ * A stable, language-independent id for a failure, mirroring a key in the panel's
+ * i18n table (`lib/i18n`). The content script runs in the page and has no idea
+ * which language the panel is showing, so it reports a CODE and lets the panel
+ * word it; `error` stays alongside as a human-readable fallback.
+ */
+export type ErrorCode =
+  | 'err.readFailed'
+  | 'err.noActiveTab'
+  | 'err.noResponse'
+  | 'err.noContentScript'
+  | 'err.noMessages'
+  | 'err.fillFailed'
+  | 'err.unknownRequest'
+  | 'err.scrollNotFound'
+  | 'err.focusChatgptTab'
+  | 'err.reloadNoMessages';
+
 export type PanelResponse =
   | { kind: 'pong'; platform: string }
   | {
@@ -43,11 +61,11 @@ export type PanelResponse =
       partial: boolean;
       source: MessageSource;
     }
-  | { kind: 'conversation'; ok: false; error: string }
+  | { kind: 'conversation'; ok: false; error: string; code?: ErrorCode }
   | { kind: 'selection'; ok: true; selection: SelectionPayload | null }
-  | { kind: 'selection'; ok: false; error: string }
-  | { kind: 'fill'; ok: boolean; error?: string }
-  | { kind: 'scroll-result'; ok: boolean; error?: string }
+  | { kind: 'selection'; ok: false; error: string; code?: ErrorCode }
+  | { kind: 'fill'; ok: boolean; error?: string; code?: ErrorCode }
+  | { kind: 'scroll-result'; ok: boolean; error?: string; code?: ErrorCode }
   | {
       kind: 'theme';
       theme: 'light' | 'dark';
@@ -55,7 +73,7 @@ export type PanelResponse =
        *  one; null when its buttons are monochrome (panel keeps its own accent). */
       accent?: string | null;
     }
-  | { kind: 'error'; error: string };
+  | { kind: 'error'; error: string; code?: ErrorCode };
 
 // --- Content Script  ->  Side Panel (push, chrome.runtime.sendMessage) -----
 

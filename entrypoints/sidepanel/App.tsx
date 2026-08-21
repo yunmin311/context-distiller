@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { compile } from '../../lib/core/compiler';
 import type { ConversationMessage } from '../../lib/core/types';
+import { isUIKey, t as translate, type UIKey } from '../../lib/i18n';
+import { LangProvider } from './i18n';
 import { useDistiller, type SelectionInput } from './useDistiller';
 import { activeTabIsSupported, copyText, sendToActiveTab } from './messaging';
 import { MessageList } from './components/MessageList';
@@ -45,6 +47,13 @@ function RefreshIcon() {
 
 export function App() {
   const { state, actions } = useDistiller();
+  // App owns the language, so it translates directly and hands the value down
+  // through LangProvider for every child (including the memoized rows).
+  const lang = state.lang;
+  const t = useMemo(
+    () => (key: UIKey, vars?: Record<string, string | number>) => translate(lang, key, vars),
+    [lang],
+  );
   const [activeGroupId, setActiveGroupId] = useState(() => state.groups[0]?.id ?? '');
   const [previewOpen, setPreviewOpen] = useState(false);
   const [scratchpadOpen, setScratchpadOpen] = useState(false);
@@ -133,16 +142,14 @@ export function App() {
       }
       if (res.ok) {
         setToast({
-          text: res.partial
-            ? `已读取 ${res.count} 条 · 超长对话可向上滚动加载后再刷新`
-            : `已读取 ${res.count} 条消息`,
+          text: t(res.partial ? 'toast.readPartial' : 'toast.read', { count: res.count }),
           tone: 'ok',
         });
       } else if (silent) {
         actions.reset();
       }
     },
-    [actions],
+    [actions, t],
   );
 
   // "重试" reloads the page for the user and reads again, so they don't have to
@@ -151,13 +158,11 @@ export function App() {
     const res = await actions.retryWithReload();
     if (res.ok) {
       setToast({
-        text: res.partial
-          ? `已刷新并读取 ${res.count} 条 · 超长对话可向上滚动加载后再刷新`
-          : `已刷新并读取 ${res.count} 条消息`,
+        text: t(res.partial ? 'toast.reloadedPartial' : 'toast.reloaded', { count: res.count }),
         tone: 'ok',
       });
     }
-  }, [actions]);
+  }, [actions, t]);
 
   // Auto-read on open when the active tab is a ChatGPT page, so the panel lands
   // straight on the messages instead of an extra click. Runs once, AFTER config +
@@ -194,8 +199,9 @@ export function App() {
       compile(state.groups, state.selections, {
         customExtras: state.customExtras,
         marks: compiledMarks,
+        lang,
       }),
-    [state.groups, state.selections, state.customExtras, compiledMarks],
+    [state.groups, state.selections, state.customExtras, compiledMarks, lang],
   );
 
   // Grouped-material count (excludes marks) — gates the 整理工作区 board so that
@@ -254,9 +260,12 @@ export function App() {
   const handleAddMessage = useCallback(
     (message: ConversationMessage) => {
       actions.addMessageFragment(message, latestRef.current.activeGroupId);
-      setToast({ text: `已加入到「${latestRef.current.activeGroupTitle}」`, tone: 'ok' });
+      setToast({
+        text: t('toast.added', { group: latestRef.current.activeGroupTitle ?? '' }),
+        tone: 'ok',
+      });
     },
-    [actions],
+    [actions, t],
   );
 
   const addPair = useCallback(
@@ -268,70 +277,82 @@ export function App() {
       if (next && next.role === 'assistant' && !added.has(next.id)) {
         actions.addMessageFragment(next, gid);
       }
-      setToast({ text: `已加入问答到「${activeGroupTitle}」`, tone: 'ok' });
+      setToast({ text: t('toast.addedPair', { group: activeGroupTitle ?? '' }), tone: 'ok' });
     },
-    [actions],
+    [actions, t],
   );
 
   const handleAddSelection = useCallback(
     (payload: SelectionInput) => {
       actions.addSelection(latestRef.current.activeGroupId, payload);
-      setToast({ text: `已加入选中到「${latestRef.current.activeGroupTitle}」`, tone: 'ok' });
+      setToast({
+        text: t('toast.addedSelection', { group: latestRef.current.activeGroupTitle ?? '' }),
+        tone: 'ok',
+      });
     },
-    [actions],
+    [actions, t],
   );
 
   async function handleCopy(text: string) {
     if (!text.trim()) {
-      setToast({ text: '还没有可复制的内容。', tone: 'warn' });
+      setToast({ text: t('toast.nothingToCopy'), tone: 'warn' });
       return;
     }
     const ok = await copyText(text);
-    setToast(ok ? { text: '已复制到剪贴板。', tone: 'ok' } : { text: '复制失败。', tone: 'error' });
+    setToast(
+      ok
+        ? { text: t('toast.copied'), tone: 'ok' }
+        : { text: t('toast.copyFailed'), tone: 'error' },
+    );
   }
 
   async function handleFill(text: string) {
     if (!text.trim()) {
-      setToast({ text: '没有可填入的内容。', tone: 'warn' });
+      setToast({ text: t('toast.nothingToFill'), tone: 'warn' });
       return;
     }
     const res = await sendToActiveTab({ kind: 'fill-composer', text });
     if (res.kind === 'fill' && res.ok) {
-      setToast({ text: '已填入输入框，检查后自行发送。', tone: 'ok' });
+      setToast({ text: t('toast.filled'), tone: 'ok' });
     } else {
-      const err = res.kind === 'fill' ? res.error : res.kind === 'error' ? res.error : undefined;
-      setToast({ text: err ?? '填入失败，请改用复制。', tone: 'error' });
+      const failed = res.kind === 'fill' || res.kind === 'error' ? res : undefined;
+      setToast({
+        text: failed?.code ? t(failed.code) : failed?.error ?? t('toast.fillFailed'),
+        tone: 'error',
+      });
     }
   }
 
   // Scroll the ChatGPT page to a fragment's source message and flash it. Pure
   // client-side scroll (no request, no account action) — see docs/PRIVACY.md.
-  const handleLocate = useCallback(async (messageId: string) => {
-    // Pass the whole conversation's ids in order, so the page can binary-search
-    // its scroll position to a message ChatGPT has virtualized out of the DOM.
-    const orderedIds = latestRef.current.messages.map((m) => m.id);
-    const res = await sendToActiveTab({ kind: 'scroll-to-message', messageId, orderedIds });
-    if (res.kind === 'scroll-result' && res.ok) return;
-    const err =
-      res.kind === 'scroll-result'
-        ? res.error ?? '未能跳转。'
-        : res.kind === 'error'
-          ? res.error
-          : '未能跳转，请确认 ChatGPT 对话页在前台。';
-    setToast({ text: err, tone: 'warn' });
-  }, []);
+  const handleLocate = useCallback(
+    async (messageId: string) => {
+      // Pass the whole conversation's ids in order, so the page can binary-search
+      // its scroll position to a message ChatGPT has virtualized out of the DOM.
+      const orderedIds = latestRef.current.messages.map((m) => m.id);
+      const res = await sendToActiveTab({ kind: 'scroll-to-message', messageId, orderedIds });
+      if (res.kind === 'scroll-result' && res.ok) return;
+      const failed = res.kind === 'scroll-result' || res.kind === 'error' ? res : undefined;
+      const text = failed?.code
+        ? t(failed.code)
+        : failed?.error ?? t(res.kind === 'scroll-result' ? 'err.scrollGeneric' : 'err.scrollNoPage');
+      setToast({ text, tone: 'warn' });
+    },
+    [t],
+  );
 
   function handleClear() {
     const hasMaterial =
       state.groups.some((g) => g.fragments.length > 0) ||
       Object.keys(state.marks).length > 0;
-    if (hasMaterial && !window.confirm('清空本次整理？已选材料、标记和备注都会丢失。')) return;
+    if (hasMaterial && !window.confirm(t('confirm.clear'))) return;
     actions.clearMaterial();
     setPreviewOpen(false);
-    setToast({ text: '已清空。', tone: 'ok' });
+    setToast({ text: t('toast.cleared'), tone: 'ok' });
   }
 
   return (
+    <LangProvider lang={lang}>
     <div className="app">
       <header className="topbar">
         <span className="brand-mark">
@@ -340,14 +361,25 @@ export function App() {
         <span className="topbar-title" title={topTitle}>
           {topTitle}
         </span>
+        {/* Explicit language switch: `auto` only decides the FIRST run, because a
+            user on a Chinese browser must still be able to reach English. */}
+        <button
+          type="button"
+          className="lang-toggle"
+          title={t('top.langTip')}
+          aria-label={t('top.langAria')}
+          onClick={() => actions.setLang(lang === 'zh' ? 'en' : 'zh')}
+        >
+          {lang === 'zh' ? '中' : 'EN'}
+        </button>
         <button
           type="button"
           className={`scratch-toggle${scratchpadOpen ? ' scratch-toggle-on' : ''}`}
-          title="便签：随手记的个人批注，只存本地、跨会话保留；永远不会编译进输出，也不发送"
+          title={t('top.scratchpadTip')}
           aria-expanded={scratchpadOpen}
           onClick={() => setScratchpadOpen((v) => !v)}
         >
-          便签
+          {t('top.scratchpad')}
           {state.scratchpad.trim() !== '' && <span className="scratch-dot" aria-hidden />}
         </button>
         {state.status === 'ready' && (
@@ -355,8 +387,8 @@ export function App() {
         )}
         <button
           className="icon-btn topbar-refresh"
-          title="读取 / 刷新当前对话"
-          aria-label="读取或刷新当前对话"
+          title={t('top.refresh')}
+          aria-label={t('top.refreshAria')}
           onClick={() => handleLoad()}
         >
           {state.status === 'loading' ? (
@@ -376,26 +408,25 @@ export function App() {
       <main className="app-main">
         {state.status === 'idle' && (
           <div className="intro">
-            <h1>选材料，编译成一段可交给 AI 的纯文本</h1>
-            <p className="muted">
-              在 ChatGPT 对话页读取消息，挑出真正有用的整条或片段，分组、点预设按钮，
-              生成一段纯文本，复制或填回输入框。不调用模型、不保存、不自动发送。
-            </p>
+            <h1>{t('intro.title')}</h1>
+            <p className="muted">{t('intro.body')}</p>
             <button className="btn btn-primary" onClick={() => handleLoad()}>
-              读取当前对话
+              {t('intro.read')}
             </button>
-            <p className="hint tiny">仅在 chatgpt.com / chat.openai.com 生效。</p>
+            <p className="hint tiny">{t('intro.scope')}</p>
           </div>
         )}
 
-        {state.status === 'loading' && <p className="muted center">正在读取当前对话…</p>}
+        {state.status === 'loading' && <p className="muted center">{t('status.loading')}</p>}
 
         {state.status === 'error' && (
           <div className="notice notice-error">
-            <strong>读取失败</strong>
-            <p className="muted tiny">{state.error}</p>
+            <strong>{t('status.errorTitle')}</strong>
+            <p className="muted tiny">
+              {state.errorCode && isUIKey(state.errorCode) ? t(state.errorCode) : state.error}
+            </p>
             <button className="btn btn-outline btn-sm" onClick={() => handleRetry()}>
-              刷新页面重试
+              {t('status.retry')}
             </button>
           </div>
         )}
@@ -403,7 +434,7 @@ export function App() {
         {state.status === 'ready' && (
           <>
             <section className="section">
-              <div className="eyebrow">对话消息</div>
+              <div className="eyebrow">{t('section.messages')}</div>
               <MessageList
                 messages={state.messages}
                 addedIds={addedIds}
@@ -425,7 +456,7 @@ export function App() {
 
             {groupFragmentCount > 0 && (
               <section className="section">
-                <div className="eyebrow">整理工作区</div>
+                <div className="eyebrow">{t('section.workspace')}</div>
                 <GroupBoard
                   groups={state.groups}
                   onMove={actions.moveFragment}
@@ -440,7 +471,7 @@ export function App() {
             )}
 
             <section className="section">
-              <div className="eyebrow">预设 Prompt</div>
+              <div className="eyebrow">{t('section.presets')}</div>
               <PresetBar
                 selections={state.selections}
                 customExtras={state.customExtras}
@@ -465,19 +496,16 @@ export function App() {
 
       <footer className="app-footer">
         <div className="footer-meta">
-          <label
-            className="remember-toggle"
-            title="打开后：本次对话与整理会存到本地，下次打开自动恢复；关闭即清除（默认关闭，不落盘）"
-          >
+          <label className="remember-toggle" title={t('footer.rememberTip')}>
             <input
               type="checkbox"
               checked={state.rememberSession}
               onChange={(e) => actions.setRemember(e.target.checked)}
             />
-            记住本次
+            {t('footer.remember')}
           </label>
           <span className="muted tiny">
-            {result.fragmentCount} 段 · {result.charCount} 字
+            {t('footer.counts', { fragments: result.fragmentCount, chars: result.charCount })}
           </span>
         </div>
         <div className="footer-actions">
@@ -486,24 +514,24 @@ export function App() {
             disabled={result.fragmentCount === 0}
             onClick={() => setPreviewOpen(true)}
           >
-            预览
+            {t('footer.preview')}
           </button>
           <button
             className="btn btn-outline btn-sm"
             disabled={result.fragmentCount === 0}
             onClick={() => handleCopy(result.text)}
           >
-            复制
+            {t('footer.copy')}
           </button>
           <button
             className="btn btn-outline btn-sm"
             disabled={result.fragmentCount === 0}
             onClick={() => handleFill(result.text)}
           >
-            填入
+            {t('footer.fill')}
           </button>
           <button className="btn btn-ghost btn-sm danger" onClick={handleClear}>
-            清空
+            {t('footer.clear')}
           </button>
         </div>
       </footer>
@@ -519,5 +547,6 @@ export function App() {
 
       {toast && <div className={`toast toast-${toast.tone}`}>{toast.text}</div>}
     </div>
+    </LangProvider>
   );
 }

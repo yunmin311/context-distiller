@@ -9,6 +9,14 @@ import type {
   PresetScope,
   PromptSelections,
 } from '../../lib/core/types';
+import {
+  browserUILanguage,
+  resolveLang,
+  t,
+  type Lang,
+  type LangPref,
+  type UIKey,
+} from '../../lib/i18n';
 import { createId } from '../../lib/utils/id';
 import { conversationKey } from '../../lib/utils/conversation-key';
 import { reloadActiveTab, sendToActiveTab } from './messaging';
@@ -17,8 +25,39 @@ import { loadSession, saveSession, clearSession, type SessionSnapshot } from './
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-/** The five default modules from 计划书 §6.3. */
-const DEFAULT_GROUP_TITLES = ['框架', '正文内容', '补充', '复盘', '关键语句'] as const;
+/**
+ * The five default modules from 计划书 §6.3, in both languages.
+ *
+ * These titles are compiled into the message as section headers, so they follow
+ * the chosen language. Switching language RELABELS them in place (see
+ * `relabelDefaultGroups`) rather than recreating them, so the fragments already
+ * grouped under a module stay exactly where the user put them.
+ */
+const DEFAULT_GROUPS: ReadonlyArray<Record<Lang, string>> = [
+  { zh: '框架', en: 'Frame' },
+  { zh: '正文内容', en: 'Body' },
+  { zh: '补充', en: 'Supplement' },
+  { zh: '复盘', en: 'Recap' },
+  { zh: '关键语句', en: 'Key sentences' },
+];
+
+/**
+ * Rename the built-in modules to `lang`. A module the USER created is never
+ * touched, and neither is a built-in whose title matches neither language (it
+ * came from an older version). Unchanged groups keep their object identity so
+ * the memoized board doesn't re-render for nothing.
+ */
+function relabelDefaultGroups(groups: FragmentGroup[], lang: Lang): FragmentGroup[] {
+  let changed = false;
+  const next = groups.map((g) => {
+    if (g.custom) return g;
+    const spec = DEFAULT_GROUPS.find((d) => d.zh === g.title || d.en === g.title);
+    if (!spec || spec[lang] === g.title) return g;
+    changed = true;
+    return { ...g, title: spec[lang] };
+  });
+  return changed ? next : groups;
+}
 
 export type SingleKey =
   | 'intent'
@@ -40,6 +79,8 @@ export interface SelectionInput {
 export interface DistillerState {
   status: 'idle' | 'loading' | 'ready' | 'error';
   error?: string;
+  /** i18n key for the failure, when the failure is one we word ourselves. */
+  errorCode?: UIKey;
   conversation?: ConversationInfo;
   messages: ConversationMessage[];
   partial: boolean;
@@ -59,14 +100,18 @@ export interface DistillerState {
    *  「记住本次」. Deliberately kept out of `groups` / `selections` / `marks` so it
    *  can never leak into the compiled prompt. */
   scratchpad: string;
+  /** Stored language preference (`auto` until the user picks one explicitly). */
+  langPref: LangPref;
+  /** The preference resolved to a concrete language — what the UI actually uses. */
+  lang: Lang;
   /** True once long-term config has been loaded, so we don't save over it. */
   hydrated: boolean;
 }
 
-function createDefaultGroups(): FragmentGroup[] {
-  return DEFAULT_GROUP_TITLES.map((title, index) => ({
+function createDefaultGroups(lang: Lang): FragmentGroup[] {
+  return DEFAULT_GROUPS.map((spec, index) => ({
     id: createId('g'),
-    title,
+    title: spec[lang],
     order: index,
     fragments: [],
   }));
@@ -84,16 +129,21 @@ function emptySelections(): PromptSelections {
 }
 
 function initialState(): DistillerState {
+  // Before local config has loaded, follow the browser's UI language, so the
+  // first paint is already in the right language instead of flashing Chinese.
+  const lang = resolveLang('auto', browserUILanguage());
   return {
     status: 'idle',
     messages: [],
     partial: false,
-    groups: createDefaultGroups(),
+    groups: createDefaultGroups(lang),
     selections: emptySelections(),
     customExtras: [],
     marks: {},
     rememberSession: false,
     scratchpad: '',
+    langPref: 'auto',
+    lang,
     hydrated: false,
   };
 }
@@ -107,7 +157,7 @@ type Action =
       partial: boolean;
       source: MessageSource;
     }
-  | { type: 'load-error'; error: string }
+  | { type: 'load-error'; error: string; code?: UIKey }
   | { type: 'reset' }
   | { type: 'add-fragment'; groupId: string; fragment: Fragment }
   | { type: 'remove-fragment'; groupId: string; fragmentId: string }
@@ -128,6 +178,7 @@ type Action =
   | { type: 'hydrate-prefs'; prefs: Prefs; snapshot: SessionSnapshot | null }
   | { type: 'set-remember'; value: boolean }
   | { type: 'set-scratchpad'; text: string }
+  | { type: 'set-lang'; pref: LangPref }
   | { type: 'clear-material' };
 
 function mapGroup(
@@ -141,7 +192,7 @@ function mapGroup(
 function reducer(state: DistillerState, action: Action): DistillerState {
   switch (action.type) {
     case 'load-start':
-      return { ...state, status: 'loading', error: undefined };
+      return { ...state, status: 'loading', error: undefined, errorCode: undefined };
 
     case 'load-success': {
       // Keep only marks whose message is still in the freshly read conversation —
@@ -163,6 +214,7 @@ function reducer(state: DistillerState, action: Action): DistillerState {
         ...state,
         status: 'ready',
         error: undefined,
+        errorCode: undefined,
         conversation: action.conversation,
         messages: action.messages,
         partial: action.partial,
@@ -174,13 +226,14 @@ function reducer(state: DistillerState, action: Action): DistillerState {
     }
 
     case 'load-error':
-      return { ...state, status: 'error', error: action.error };
+      return { ...state, status: 'error', error: action.error, errorCode: action.code };
 
     case 'reset':
       return {
         ...state,
         status: 'idle',
         error: undefined,
+        errorCode: undefined,
         conversation: undefined,
         messages: [],
         partial: false,
@@ -267,7 +320,9 @@ function reducer(state: DistillerState, action: Action): DistillerState {
           ...state.groups,
           {
             id: action.id,
-            title: action.title.trim() || `模块 ${state.groups.length + 1}`,
+            title:
+              action.title.trim() ||
+              t(state.lang, 'module.fallback', { n: state.groups.length + 1 }),
             order: state.groups.length,
             fragments: [],
             custom: true,
@@ -354,10 +409,16 @@ function reducer(state: DistillerState, action: Action): DistillerState {
 
     case 'hydrate-prefs': {
       const { prefs, snapshot } = action;
+      // The stored preference wins over the browser's UI language we guessed at
+      // startup, and the built-in modules are relabelled to match it.
+      const langPref: LangPref = prefs.lang ?? 'auto';
+      const lang = resolveLang(langPref, browserUILanguage());
       // Opt-in full restore: use the saved working set verbatim ("原样恢复").
       if (snapshot) {
         return {
           ...state,
+          langPref,
+          lang,
           rememberSession: prefs.rememberSession,
           // 便签 is long-term config, not part of the session snapshot — always
           // restore it from prefs regardless of the remembered working set.
@@ -367,7 +428,10 @@ function reducer(state: DistillerState, action: Action): DistillerState {
           partial: snapshot.partial,
           source: snapshot.source,
           status: snapshot.messages.length > 0 ? 'ready' : state.status,
-          groups: snapshot.groups.length > 0 ? snapshot.groups : state.groups,
+          groups: relabelDefaultGroups(
+            snapshot.groups.length > 0 ? snapshot.groups : state.groups,
+            lang,
+          ),
           selections: snapshot.selections,
           customExtras: snapshot.customExtras,
           marks: snapshot.marks ?? {},
@@ -375,7 +439,8 @@ function reducer(state: DistillerState, action: Action): DistillerState {
         };
       }
       // Default path: only long-term modules / requirements come back.
-      const titles = new Set(state.groups.map((g) => g.title));
+      const baseGroups = relabelDefaultGroups(state.groups, lang);
+      const titles = new Set(baseGroups.map((g) => g.title));
       const restored: FragmentGroup[] = [];
       prefs.modules.forEach((title, i) => {
         if (titles.has(title)) return;
@@ -383,7 +448,7 @@ function reducer(state: DistillerState, action: Action): DistillerState {
         restored.push({
           id: createId('g'),
           title,
-          order: state.groups.length + i,
+          order: baseGroups.length + i,
           fragments: [],
           custom: true,
           persist: true,
@@ -400,11 +465,24 @@ function reducer(state: DistillerState, action: Action): DistillerState {
       }));
       return {
         ...state,
+        langPref,
+        lang,
         rememberSession: prefs.rememberSession,
         scratchpad: prefs.scratchpad ?? '',
-        groups: [...state.groups, ...restored],
+        groups: [...baseGroups, ...restored],
         customExtras,
         hydrated: true,
+      };
+    }
+
+    case 'set-lang': {
+      const lang = resolveLang(action.pref, browserUILanguage());
+      if (action.pref === state.langPref && lang === state.lang) return state;
+      return {
+        ...state,
+        langPref: action.pref,
+        lang,
+        groups: relabelDefaultGroups(state.groups, lang),
       };
     }
 
@@ -461,12 +539,20 @@ export function useDistiller() {
         .filter((e) => e.scope === 'persist')
         .map((e) => ({ id: e.id, name: e.name, text: e.text })),
       scratchpad: state.scratchpad,
+      lang: state.langPref,
     };
     const signature = JSON.stringify(prefs);
     if (signature === lastSaved.current) return;
     lastSaved.current = signature;
     void savePrefs(prefs);
-  }, [state.groups, state.customExtras, state.hydrated, state.rememberSession, state.scratchpad]);
+  }, [
+    state.groups,
+    state.customExtras,
+    state.hydrated,
+    state.rememberSession,
+    state.scratchpad,
+    state.langPref,
+  ]);
 
   // Opt-in session snapshot: while "记住本次整理" is on, mirror the working set
   // (conversation + material + selections) to storage so reopening restores it.
@@ -520,7 +606,13 @@ export function useDistiller() {
   const loadConversation = useCallback(
     async (
       quiet = false,
-    ): Promise<{ ok: boolean; count: number; partial: boolean; error?: string }> => {
+    ): Promise<{
+      ok: boolean;
+      count: number;
+      partial: boolean;
+      error?: string;
+      code?: UIKey;
+    }> => {
       dispatch({ type: 'load-start' });
       const res = await sendToActiveTab({ kind: 'get-conversation' });
       if (res.kind === 'conversation' && res.ok) {
@@ -533,14 +625,12 @@ export function useDistiller() {
         });
         return { ok: true, count: res.messages.length, partial: res.partial };
       }
-      const error =
-        res.kind === 'conversation' && !res.ok
-          ? res.error
-          : res.kind === 'error'
-            ? res.error
-            : '读取对话失败。';
-      if (!quiet) dispatch({ type: 'load-error', error });
-      return { ok: false, count: 0, partial: false, error };
+      const failed =
+        (res.kind === 'conversation' && !res.ok) || res.kind === 'error' ? res : undefined;
+      const error = failed?.error ?? '读取对话失败。';
+      const code = failed?.code ?? 'err.readFailed';
+      if (!quiet) dispatch({ type: 'load-error', error, code });
+      return { ok: false, count: 0, partial: false, error, code };
     },
     [],
   );
@@ -558,6 +648,7 @@ export function useDistiller() {
         dispatch({
           type: 'load-error',
           error: '请先切换到并聚焦 ChatGPT 对话标签页（chatgpt.com），再点重试。',
+          code: 'err.focusChatgptTab',
         });
         return { ok: false, count: 0, partial: false };
       }
@@ -578,6 +669,7 @@ export function useDistiller() {
       dispatch({
         type: 'load-error',
         error: '刷新后仍未读取到消息，请确认页面已打开一个对话后再重试。',
+        code: 'err.reloadNoMessages',
       });
       return { ok: false, count: 0, partial: false };
     },
@@ -669,6 +761,8 @@ export function useDistiller() {
       },
       /** 便签: update the private annotation pad. Never compiled into the output. */
       setScratchpad: (text: string) => dispatch({ type: 'set-scratchpad', text }),
+      /** Pin the interface + compiled-prompt language (persisted as config). */
+      setLang: (pref: LangPref) => dispatch({ type: 'set-lang', pref }),
     }),
     [loadConversation, retryWithReload, addMessageFragment, addSelection],
   );

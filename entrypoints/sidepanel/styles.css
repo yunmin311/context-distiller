@@ -323,6 +323,29 @@ body {
 .scratch-toggle-on {
   color: var(--accent-ink);
 }
+/* Language switch — a small pill in the top bar, on the accent family like the
+   other chips. Fixed min-width so "中" and "EN" don't shift the bar's layout. */
+.lang-toggle {
+  flex: none;
+  min-width: 26px;
+  padding: 2px 6px;
+  border: 1px solid var(--accent-edge);
+  border-radius: 6px;
+  background: var(--accent-tint);
+  font-family: inherit;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  line-height: 1.4;
+  color: var(--accent-ink);
+  cursor: pointer;
+  transition:
+    background 0.14s,
+    border-color 0.14s;
+}
+.lang-toggle:hover {
+  background: var(--accent-tint-strong);
+}
 .scratch-dot {
   width: 5px;
   height: 5px;

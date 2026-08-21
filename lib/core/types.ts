@@ -112,6 +112,14 @@ export interface PresetOption {
   version: number;
   /** Optional one-line explanation shown in the UI. */
   hint?: string;
+  /**
+   * English twins. Built-in presets ship all three; a user's own custom
+   * requirement has none (their text compiles verbatim in either language).
+   * See `presetName` / `presetHint` / `presetText` in `presets.ts`.
+   */
+  nameEn?: string;
+  hintEn?: string;
+  textEn?: string;
   /** True for a user-defined requirement (editable / deletable in the UI). */
   custom?: boolean;
   /** For custom requirements: session-only or remembered long-term. */

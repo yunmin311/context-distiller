@@ -1,6 +1,7 @@
 import { memo, useMemo, useRef, useState } from 'react';
 import type { Fragment, FragmentGroup } from '../../../lib/core/types';
 import { plainify } from '../../../lib/utils/plainify';
+import { useT, type TFn } from '../i18n';
 
 interface GroupBoardProps {
   groups: FragmentGroup[];
@@ -14,8 +15,8 @@ interface GroupBoardProps {
   onLocate: (messageId: string) => void;
 }
 
-function roleLabel(role: 'user' | 'assistant'): string {
-  return role === 'user' ? '你' : 'AI';
+function roleLabel(role: 'user' | 'assistant', t: TFn): string {
+  return role === 'user' ? t('role.user') : t('role.assistant');
 }
 
 /** Crosshair — "locate this in the conversation". */
@@ -66,7 +67,8 @@ const FragmentRow = memo(function FragmentRow({
   onMoveToGroup,
   onLocate,
 }: FragmentRowProps) {
-  const others = moveTargets.filter((t) => t.id !== groupId);
+  const t = useT();
+  const others = moveTargets.filter((target) => target.id !== groupId);
   const display = plainify(fragment.text);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
@@ -83,22 +85,22 @@ const FragmentRow = memo(function FragmentRow({
       setEditing(false);
       return;
     }
-    const t = draft.trim();
-    if (t && t !== display) onSetText(groupId, fragment.id, t);
+    const next = draft.trim();
+    if (next && next !== display) onSetText(groupId, fragment.id, next);
     setEditing(false);
   }
 
   return (
     <li className="frag">
       <div className="frag-head">
-        <span className={`tag tag-${fragment.role} xs`}>{roleLabel(fragment.role)}</span>
+        <span className={`tag tag-${fragment.role} xs`}>{roleLabel(fragment.role, t)}</span>
         <div className="spacer" />
         {fragment.messageId && (
           <button
             className="icon-btn xs"
             onClick={() => onLocate(fragment.messageId!)}
-            title="在左侧对话里定位这条（只滚动页面，不影响账号）"
-            aria-label="在对话里定位这条"
+            title={t('frag.locate')}
+            aria-label={t('msg.locateAria')}
           >
             <LocateIcon />
           </button>
@@ -107,8 +109,8 @@ const FragmentRow = memo(function FragmentRow({
           className="icon-btn xs"
           disabled={isFirst}
           onClick={() => onMove(groupId, fragment.id, -1)}
-          title="上移"
-          aria-label="上移片段"
+          title={t('frag.up')}
+          aria-label={t('frag.upAria')}
         >
           ↑
         </button>
@@ -116,16 +118,16 @@ const FragmentRow = memo(function FragmentRow({
           className="icon-btn xs"
           disabled={isLast}
           onClick={() => onMove(groupId, fragment.id, 1)}
-          title="下移"
-          aria-label="下移片段"
+          title={t('frag.down')}
+          aria-label={t('frag.downAria')}
         >
           ↓
         </button>
         <button
           className="icon-btn xs danger-hover"
           onClick={() => onRemove(groupId, fragment.id)}
-          title="删除"
-          aria-label="删除片段"
+          title={t('frag.remove')}
+          aria-label={t('frag.removeAria')}
         >
           ✕
         </button>
@@ -148,7 +150,7 @@ const FragmentRow = memo(function FragmentRow({
       ) : (
         <div
           className="frag-text frag-text-editable"
-          title="点击编辑这段正文（失焦保存，Esc 取消）"
+          title={t('frag.editTip')}
           onClick={startEdit}
         >
           {display}
@@ -158,7 +160,7 @@ const FragmentRow = memo(function FragmentRow({
       <div className="frag-foot">
         <input
           className="input note-input"
-          placeholder="备注（可选）"
+          placeholder={t('frag.note')}
           value={fragment.note ?? ''}
           onChange={(e) => onSetNote(groupId, fragment.id, e.target.value)}
         />
@@ -169,9 +171,9 @@ const FragmentRow = memo(function FragmentRow({
             onChange={(e) => {
               if (e.target.value) onMoveToGroup(groupId, e.target.value, fragment.id);
             }}
-            title="移动到其他模块"
+            title={t('frag.moveToTip')}
           >
-            <option value="">移到…</option>
+            <option value="">{t('frag.moveTo')}</option>
             {others.map((g) => (
               <option key={g.id} value={g.id}>
                 {g.title}
@@ -199,6 +201,7 @@ export function GroupBoard({
   onRemoveGroup,
   onLocate,
 }: GroupBoardProps) {
+  const t = useT();
   // Stable move-target list (id + title), rebuilt only when group ids/titles
   // change — not on every fragment / note edit — so the memoized rows stay put.
   const groupsKey = groups.map((g) => `${g.id}:${g.title}`).join('|');
@@ -222,12 +225,8 @@ export function GroupBoard({
                 {isEmpty && groups.length > 1 && (
                   <button
                     className="icon-btn xs danger-hover"
-                    title={
-                      group.persist
-                        ? '删除这个模块（长期模块，一并从记忆里移除）'
-                        : '删除这个空模块'
-                    }
-                    aria-label={`删除模块：${group.title}`}
+                    title={t(group.persist ? 'group.removePersist' : 'group.removeEmpty')}
+                    aria-label={t('group.removeAria', { title: group.title })}
                     onClick={() => onRemoveGroup(group.id)}
                   >
                     ✕

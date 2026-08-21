@@ -5,6 +5,8 @@
  * privacy promise holds. Session-scoped items never touch storage at all.
  */
 
+import type { LangPref } from '../../lib/i18n';
+
 const KEY = 'cd-prefs-v1';
 
 /** A requirement the user chose to remember long-term. */
@@ -31,9 +33,21 @@ export interface Prefs {
    * anywhere. Independent of 「记住本次」 (it's config, not conversation data).
    */
   scratchpad?: string;
+  /**
+   * Interface + compiled-prompt language. `auto` (the default) resolves from the
+   * browser's UI language on first run; picking 中文 / English in the top bar
+   * pins it, so the choice survives a browser whose UI language differs.
+   */
+  lang?: LangPref;
 }
 
-const EMPTY: Prefs = { rememberSession: false, modules: [], extras: [], scratchpad: '' };
+const EMPTY: Prefs = {
+  rememberSession: false,
+  modules: [],
+  extras: [],
+  scratchpad: '',
+  lang: 'auto',
+};
 
 /** Upper bound for the free-text 便签, so a corrupted / huge blob can't bloat storage. */
 const MAX_SCRATCHPAD = 20000;
@@ -72,6 +86,7 @@ export async function loadPrefs(): Promise<Prefs> {
           };
         }),
       scratchpad: clampStr(p?.scratchpad, MAX_SCRATCHPAD),
+      lang: p?.lang === 'zh' || p?.lang === 'en' ? p.lang : 'auto',
     };
   } catch {
     return EMPTY;

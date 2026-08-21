@@ -7,6 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.0] — 2026-08-21
+
+### Added
+- **English version / 英文版本** — the panel now ships in **Chinese and English**,
+  switched with a **中 / EN** button in the top bar. The choice is stored as local
+  config and survives across sessions.
+  - **The compiled prompt switches too**, not just the chrome. In English mode the
+    base instruction, every preset Prompt, the built-in prompt-library entries and
+    the default module names are authored English — not machine translations of the
+    Chinese — and the section brackets and note wrapper follow suit
+    (`【框架】` → `[Frame]`, `【标记】` → `[Marks]`, `（备注：…）` → `(note: …)`).
+  - **What you wrote is never translated.** A custom requirement, a fragment note,
+    a mark note, a module you named yourself and the 便签 all compile verbatim in
+    either language — the extension translates its own words, never yours.
+  - **Deliberately not `chrome.i18n` / `_locales`.** That follows the browser's UI
+    language and cannot be switched inside the extension, so a user on a Chinese
+    Chrome could never reach the English build. The preference defaults to `auto`
+    (resolved from the browser's UI language on first run) and an explicit pick
+    pins it.
+  - Switching language **relabels the built-in modules in place** — the fragments
+    already grouped under them stay exactly where you put them.
+  - A new **用英文输出 / Answer in English** additional requirement joins the
+    existing 用中文输出.
+  - Failures now travel from the page to the panel as **language-independent
+    codes**, so an error message is worded in whichever language the panel shows.
+- New unit tests pin the parity: the two string tables must have identical keys and
+  identical placeholders, no English string may contain leftover Chinese, and every
+  built-in preset and prompt-library entry must carry an English twin. **61 tests**
+  (was 36).
+
+### Fixed
+- The English labels use an ASCII `+` where the Chinese ones use the fullwidth `＋`,
+  which rendered oversized and misaligned next to Latin text.
+
 ## [1.1.2] — 2026-08-21
 
 ### Added

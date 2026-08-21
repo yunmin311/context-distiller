@@ -1,9 +1,16 @@
 import { useMemo, useState } from 'react';
-import { PRESET_GROUPS } from '../../../lib/core/presets';
-import { PROMPT_LIBRARY, PROMPT_LIBRARY_CATEGORIES } from '../../../lib/core/prompt-library';
+import { PRESET_GROUPS, groupLabel, presetHint, presetName, presetText } from '../../../lib/core/presets';
+import {
+  PROMPT_LIBRARY,
+  PROMPT_LIBRARY_CATEGORIES,
+  categoryLabel,
+  entryName,
+  entryText,
+} from '../../../lib/core/prompt-library';
 import type { PromptLibraryEntry } from '../../../lib/core/prompt-library';
 import type { PresetOption, PromptSelections } from '../../../lib/core/types';
 import type { SingleKey } from '../useDistiller';
+import { useLang, useT } from '../i18n';
 
 interface PresetBarProps {
   selections: PromptSelections;
@@ -54,6 +61,8 @@ export function PresetBar({
   onUpdateCustom,
   onRemoveCustom,
 }: PresetBarProps) {
+  const t = useT();
+  const lang = useLang();
   // editing: null = closed, 'new' = adding, otherwise the id being edited.
   const [editing, setEditing] = useState<string | null>(null);
   const [draft, setDraft] = useState('');
@@ -106,24 +115,26 @@ export function PresetBar({
     close();
   }
   function importEntry(entry: PromptLibraryEntry) {
-    setDraftName(entry.name);
-    setDraft(entry.text);
+    setDraftName(entryName(entry, lang));
+    setDraft(entryText(entry, lang));
     setLibOpen(false);
   }
 
   // Library entries grouped by category, filtered by the picker's search box.
+  // The search matches the CURRENT language's name/text plus the category label,
+  // so typing English in English mode finds things (and likewise for Chinese).
   const libGroups = useMemo(() => {
     const q = libFilter.trim().toLowerCase();
     const match = (e: PromptLibraryEntry) =>
       !q ||
-      e.name.toLowerCase().includes(q) ||
-      e.text.toLowerCase().includes(q) ||
-      e.category.toLowerCase().includes(q);
+      entryName(e, lang).toLowerCase().includes(q) ||
+      entryText(e, lang).toLowerCase().includes(q) ||
+      categoryLabel(e.category, lang).toLowerCase().includes(q);
     return PROMPT_LIBRARY_CATEGORIES.map((category) => ({
       category,
       entries: PROMPT_LIBRARY.filter((e) => e.category === category && match(e)),
     })).filter((g) => g.entries.length > 0);
-  }, [libFilter]);
+  }, [libFilter, lang]);
 
   return (
     <div className="preset-bar">
@@ -141,14 +152,14 @@ export function PresetBar({
         return (
           <div key={group.id} className="preset-group">
             <div className="preset-label">
-              {group.label}
-              {group.mode === 'multi' && <span className="preset-multi">可多选</span>}
+              {groupLabel(group, lang)}
+              {group.mode === 'multi' && <span className="preset-multi">{t('preset.multi')}</span>}
               {collapsible && (
                 <button
                   className="collapse-btn"
                   onClick={() => toggleOpen(group.id)}
-                  title={showAll ? '收起' : '展开全部'}
-                  aria-label={showAll ? '收起' : '展开全部'}
+                  title={t(showAll ? 'preset.collapse' : 'preset.expandAll')}
+                  aria-label={t(showAll ? 'preset.collapse' : 'preset.expandAll')}
                   aria-expanded={showAll}
                 >
                   <Chevron open={showAll} />
@@ -165,14 +176,14 @@ export function PresetBar({
                   <button
                     key={option.id}
                     className={`chip ${active ? 'chip-active' : ''}`}
-                    title={option.hint ?? option.text}
+                    title={presetHint(option, lang) ?? presetText(option, lang)}
                     onClick={() =>
                       group.mode === 'single'
                         ? onSetSingle(singleKey!, option.id)
                         : onToggleExtra(option.id)
                     }
                   >
-                    {option.name}
+                    {presetName(option, lang)}
                   </button>
                 );
               })}
@@ -185,9 +196,13 @@ export function PresetBar({
                     <span key={option.id} className="chip-custom-wrap">
                       <button
                         className={`chip chip-custom ${active ? 'chip-active' : ''}`}
-                        title={`${option.text}\n（自定义${
-                          option.scope === 'persist' ? '·长期' : '·本次'
-                        }｜点选用，双击改）`}
+                        title={`${option.text}\n${t('preset.customTip', {
+                          scope: t(
+                            option.scope === 'persist'
+                              ? 'preset.scopePersist'
+                              : 'preset.scopeSession',
+                          ),
+                        })}`}
                         onClick={() => onToggleExtra(option.id)}
                         onDoubleClick={() => openEdit(option)}
                       >
@@ -195,8 +210,8 @@ export function PresetBar({
                       </button>
                       <button
                         className="chip-x"
-                        title="删除这条自定义要求"
-                        aria-label={`删除自定义要求：${option.name}`}
+                        title={t('preset.removeCustom')}
+                        aria-label={t('preset.removeCustomAria', { name: option.name })}
                         onClick={() => {
                           if (editing === option.id) close();
                           onRemoveCustom(option.id);
@@ -209,8 +224,8 @@ export function PresetBar({
                 })}
 
               {isExtras && showAll && editing === null && (
-                <button className="chip chip-add" title="添加一条你自己的要求" onClick={openNew}>
-                  ＋ 自定义
+                <button className="chip chip-add" title={t('preset.addCustomTip')} onClick={openNew}>
+                  {t('preset.addCustom')}
                 </button>
               )}
             </div>
@@ -220,7 +235,7 @@ export function PresetBar({
                 <input
                   className="input custom-name"
                   maxLength={24}
-                  placeholder="起个名字（可选，留空自动取）"
+                  placeholder={t('preset.namePlaceholder')}
                   value={draftName}
                   onChange={(e) => setDraftName(e.target.value)}
                 />
@@ -229,7 +244,7 @@ export function PresetBar({
                   autoFocus
                   rows={3}
                   maxLength={4000}
-                  placeholder="写一条要求，会原样拼进消息里；或点「从库导入」挑一个现成的详细提示词再改。"
+                  placeholder={t('preset.textPlaceholder')}
                   value={draft}
                   onChange={(e) => setDraft(e.target.value)}
                 />
@@ -238,9 +253,9 @@ export function PresetBar({
                     className="chip-btn tiny lib-open-btn"
                     onClick={() => setLibOpen((v) => !v)}
                     aria-expanded={libOpen}
-                    title="从内置提示词库挑一个填进来"
+                    title={t('preset.importTip')}
                   >
-                    从库导入 <Chevron open={libOpen} />
+                    {t('preset.importFromLibrary')} <Chevron open={libOpen} />
                   </button>
                   <div className="spacer" />
                   {editing === 'new' ? (
@@ -249,17 +264,17 @@ export function PresetBar({
                         className="chip-btn tiny"
                         disabled={!draft.trim()}
                         onClick={() => commitNew(false)}
-                        title="只在这次有，关掉就没了"
+                        title={t('list.scopeSessionTip')}
                       >
-                        本次
+                        {t('list.scopeSession')}
                       </button>
                       <button
                         className="chip-btn tiny"
                         disabled={!draft.trim()}
                         onClick={() => commitNew(true)}
-                        title="长期保留，下次打开还在"
+                        title={t('list.scopePersistTip')}
                       >
-                        长期
+                        {t('list.scopePersist')}
                       </button>
                     </>
                   ) : (
@@ -268,11 +283,11 @@ export function PresetBar({
                       disabled={!draft.trim()}
                       onClick={() => commitEdit(editing)}
                     >
-                      保存
+                      {t('preset.save')}
                     </button>
                   )}
                   <button className="link-btn tiny" onClick={close}>
-                    取消
+                    {t('preset.cancel')}
                   </button>
                 </div>
 
@@ -281,36 +296,38 @@ export function PresetBar({
                     <input
                       className="input lib-search"
                       type="search"
-                      placeholder="搜提示词…"
+                      placeholder={t('preset.searchLibrary')}
                       value={libFilter}
                       onChange={(e) => setLibFilter(e.target.value)}
                     />
                     <div className="lib-list">
                       {libGroups.map(({ category, entries }) => (
                         <div key={category} className="lib-cat">
-                          <div className="lib-cat-label">{category}</div>
+                          <div className="lib-cat-label">{categoryLabel(category, lang)}</div>
                           {entries.map((entry) => (
                             <button
                               key={entry.id}
                               className="lib-item"
-                              title={entry.text}
+                              title={entryText(entry, lang)}
                               onClick={() => importEntry(entry)}
                             >
-                              <span className="lib-item-name">{entry.name}</span>
-                              {entry.source && (
-                                <span className="lib-item-src">{entry.source}</span>
-                              )}
+                              <span className="lib-item-name">{entryName(entry, lang)}</span>
+                              <span className="lib-item-src">
+                                {t(
+                                  entry.source === 'fabric'
+                                    ? 'preset.srcFabric'
+                                    : 'preset.srcOriginal',
+                                )}
+                              </span>
                             </button>
                           ))}
                         </div>
                       ))}
                       {libGroups.length === 0 && (
-                        <p className="muted tiny lib-empty">没有匹配的提示词。</p>
+                        <p className="muted tiny lib-empty">{t('preset.libraryEmpty')}</p>
                       )}
                     </div>
-                    <p className="hint tiny lib-note">
-                      选一条填进上面，可再改名 / 编辑；部分改编自 Fabric（MIT）。
-                    </p>
+                    <p className="hint tiny lib-note">{t('preset.libraryNote')}</p>
                   </div>
                 )}
               </div>

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useT } from '../i18n';
 
 interface PreviewPanelProps {
   open: boolean;
@@ -22,6 +23,7 @@ export function PreviewPanel({
   onCopy,
   onFill,
 }: PreviewPanelProps) {
+  const t = useT();
   const [draft, setDraft] = useState(text);
 
   // Re-seed the editable draft whenever the panel is (re)opened with new text.
@@ -34,15 +36,16 @@ export function PreviewPanel({
   const draftCount = [...draft].length;
 
   return (
-    <div className="overlay" role="dialog" aria-label="完整消息预览">
+    <div className="overlay" role="dialog" aria-label={t('preview.title')}>
       <div className="overlay-head">
-        <strong>完整消息预览</strong>
+        <strong>{t('preview.title')}</strong>
         <span className="muted small">
-          {draftCount} 字{draftCount !== charCount ? '（已编辑）' : ''}
+          {t('preview.chars', { count: draftCount })}
+          {draftCount !== charCount ? t('preview.edited') : ''}
         </span>
         <div className="spacer" />
         <button className="btn btn-ghost btn-sm" onClick={onClose}>
-          返回
+          {t('preview.back')}
         </button>
       </div>
 
@@ -55,15 +58,13 @@ export function PreviewPanel({
 
       <div className="overlay-actions">
         <button className="btn btn-primary" onClick={() => onCopy(draft)}>
-          复制完整消息
+          {t('preview.copy')}
         </button>
         <button className="btn btn-secondary" onClick={() => onFill(draft)}>
-          填入当前对话
+          {t('preview.fill')}
         </button>
       </div>
-      <p className="hint small">
-        插件不会自动发送。填入后请在 ChatGPT 输入框中检查，并由你自己点击发送。
-      </p>
+      <p className="hint small">{t('preview.hint')}</p>
     </div>
   );
 }

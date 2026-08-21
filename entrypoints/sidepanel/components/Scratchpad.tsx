@@ -1,4 +1,5 @@
 import { memo, useState } from 'react';
+import { useT } from '../i18n';
 
 interface ScratchpadProps {
   /** The committed 便签 text held in state (already hydrated from local config). */
@@ -21,6 +22,7 @@ const MAX_SCRATCHPAD = 20000;
  * existing signature-dedupe handles the actual save.
  */
 export const Scratchpad = memo(function Scratchpad({ value, onCommit }: ScratchpadProps) {
+  const t = useT();
   const [draft, setDraft] = useState(value);
 
   function commit() {
@@ -31,8 +33,8 @@ export const Scratchpad = memo(function Scratchpad({ value, onCommit }: Scratchp
     <div className="scratchpad">
       <textarea
         className="input scratchpad-text"
-        placeholder="随手记点什么…只存在本地，永远不会编译进输出，也不会发送。"
-        aria-label="便签"
+        placeholder={t('scratch.placeholder')}
+        aria-label={t('top.scratchpad')}
         value={draft}
         maxLength={MAX_SCRATCHPAD}
         onChange={(e) => setDraft(e.target.value)}
