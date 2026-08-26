@@ -5,7 +5,7 @@ All notable changes to Context Distiller are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.3.0] — 2026-08-26
 
 ### Added
 - **DEEP LOAD — 三连击刷新** — for giant or throttled threads: click the refresh
@@ -338,4 +338,5 @@ to the user. Local-only — no model API, no server, no tracking, never auto-sen
 [0.3.0]: https://github.com/yunmin311/context-distiller/releases/tag/v0.3.0
 [0.2.0]: https://github.com/yunmin311/context-distiller/releases/tag/v0.2.0
 [0.1.0]: https://github.com/yunmin311/context-distiller/releases/tag/v0.1.0
+
 

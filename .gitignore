@@ -24,3 +24,4 @@ stats-*.json
 
 # Local-only logo picker preview (not part of the product)
 logo-options.html
+release/
