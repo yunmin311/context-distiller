@@ -49,6 +49,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   half-loaded page are DOM-only too, so a slow network no longer makes the
   start button feel dead for half a minute.
 
+### Fixed
+- **Locate no longer drifts to the top of the message.** After a jump, ChatGPT's
+  virtualizer keeps re-layouting for up to a second, and that drift could shove
+  the target to the viewport top. The landing is now verified at 240/480/900ms
+  and re-centered whenever the target drifted away from the middle, with Follow
+  muted for the whole settle.
+
 ### Changed
 - Backend read retries are bounded (2 × 11s, no second token round), so a
   failing read surfaces in ≤ ~35s instead of stretching past a minute — and

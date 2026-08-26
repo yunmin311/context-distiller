@@ -529,15 +529,23 @@ async function scrollToMessage(messageId: string, orderedIds?: string[]): Promis
   }
   beginProgrammaticScroll(1400);
   el.scrollIntoView({ block: 'center', behavior: 'smooth' });
-  // Virtualization re-lays-out around the new position, which can nudge the target
-  // off-center; re-center once it settles, then flash whatever's there now.
-  const target = el;
-  window.setTimeout(() => {
-    const settled = document.querySelector<HTMLElement>(sel) ?? target;
-    beginProgrammaticScroll(900);
-    settled.scrollIntoView({ block: 'center', behavior: 'auto' });
-    flashElement(settled);
-  }, 240);
+  // The virtualizer keeps RE-LAYOUTING after we arrive (heights above the
+  // target settle late), and that drift can shove the target to the TOP of the
+  // viewport. One compensation pass wasn't enough — verify the landing several
+  // times and re-center whenever the target drifted away from the middle.
+  void (async () => {
+    for (const delay of [240, 480, 900]) {
+      await sleep(delay);
+      const cur = document.querySelector<HTMLElement>(sel) ?? el;
+      beginProgrammaticScroll(1000); // keep Follow muted for the whole settle
+      const rect = cur.getBoundingClientRect();
+      const offCenter = Math.abs(rect.top + rect.height / 2 - window.innerHeight / 2);
+      if (offCenter > 80) {
+        cur.scrollIntoView({ block: 'center', behavior: 'auto' });
+      }
+      if (delay === 900) flashElement(cur);
+    }
+  })();
   return { kind: 'scroll-result', ok: true };
 }
 
