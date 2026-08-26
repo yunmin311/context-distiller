@@ -1,6 +1,5 @@
 import { memo, useState } from 'react';
 import { useT } from '../i18n';
-import { MAX_SCRATCHPAD } from '../prefs';
 
 interface ScratchpadProps {
   /** The committed 便签 text held in state (already hydrated from local config). */
@@ -8,6 +7,9 @@ interface ScratchpadProps {
   /** Commit the edited text back to state (persisted as long-term config). */
   onCommit: (text: string) => void;
 }
+
+/** Hard cap mirrors loadPrefs' bound, so a paste can't exceed what storage keeps. */
+const MAX_SCRATCHPAD = 20000;
 
 /**
  * 便签 — a private annotation pad. Pure personal notes: they are NEVER compiled

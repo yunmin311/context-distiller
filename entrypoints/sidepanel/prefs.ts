@@ -50,7 +50,7 @@ const EMPTY: Prefs = {
 };
 
 /** Upper bound for the free-text 便签, so a corrupted / huge blob can't bloat storage. */
-export const MAX_SCRATCHPAD = 20000;
+const MAX_SCRATCHPAD = 20000;
 
 // Defensive caps: config could be corrupted (hand-edited storage, an older bug,
 // a pathological accumulation). Bound counts and lengths so a bad blob can never
