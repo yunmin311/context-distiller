@@ -2,17 +2,14 @@ import type { ConversationInfo, MessageSource } from '../lib/core/types';
 import { normalizeMessages, coerceRole } from '../lib/platform/normalizer';
 import type { RawMessage } from '../lib/platform/adapter';
 import { chatgptAdapter } from '../lib/platform/chatgpt-adapter';
-import { nextSeekTop, seekDirection } from '../lib/utils/seek-step';
 import {
   MW_REQUEST_EVENT,
   MW_RESPONSE_EVENT,
-  type ErrorCode,
   type PanelRequest,
   type PanelResponse,
   type SelectionPayload,
   type MwRequest,
   type MwResponse,
-  type MwFailKind,
   type ActiveMessagePush,
   type ThemePush,
   type ConversationGrewPush,
@@ -353,10 +350,6 @@ async function getConversation(): Promise<PanelResponse> {
   let raw: RawMessage[];
   let source: MessageSource;
   let partial: boolean;
-  // Why the full backend read failed (if it did) — surfaced only when the DOM
-  // fallback also finds nothing, so the user sees the real cause, not noise.
-  let apiFailKind: MwFailKind | undefined;
-  let apiFailDetail: string | undefined;
 
   // Primary: full thread from ChatGPT's backend, fetched in the MAIN WORLD (page
   // context — same-origin session auth works there, unlike an isolated-world
@@ -378,12 +371,9 @@ async function getConversation(): Promise<PanelResponse> {
   } else {
     // Full read unavailable — record WHY (a null api = it timed out), then fall
     // back to the mounted DOM (partial when ChatGPT virtualizes a long thread).
-    // failKind is kept so that if the fallback ALSO comes up empty we can tell
-    // the user what actually broke instead of a generic failure.
-    const failKind = (api ? api.failKind : undefined) ?? undefined;
     console.info(
       '[Context Distiller] full read unavailable → partial DOM read. reason:',
-      api ? `${api.error ?? 'unknown'}${failKind ? ` [${failKind}]` : ''}` : 'timed out (no response within 40s)',
+      api ? api.error ?? 'unknown' : 'timed out (no response within 40s)',
     );
     const domRaw = chatgptAdapter.extractFromDom();
     if (domRaw.length > 0) {
@@ -407,8 +397,6 @@ async function getConversation(): Promise<PanelResponse> {
       source = 'page-data';
     }
     partial = true;
-    apiFailKind = failKind;
-    apiFailDetail = api?.error;
   }
 
   console.debug(
@@ -422,20 +410,12 @@ async function getConversation(): Promise<PanelResponse> {
 
   const messages = normalizeMessages(raw);
   if (messages.length === 0) {
-    // Nothing readable anywhere. When the full read also failed with a KNOWN
-    // cause, say that cause — this is the contract-drift probe surfacing: a
-    // login problem and a ChatGPT redesign need very different reactions.
-    const code: ErrorCode =
-      apiFailKind === 'auth'
-        ? 'err.loginExpired'
-        : apiFailKind === 'contract'
-          ? 'err.contractChanged'
-          : 'err.noMessages';
-    console.info(
-      '[Context Distiller] nothing readable.',
-      apiFailKind ? `full-read failKind=${apiFailKind} (${apiFailDetail ?? ''})` : '',
-    );
-    return { kind: 'conversation', ok: false, error: code, code };
+    return {
+      kind: 'conversation',
+      ok: false,
+      error: '未读取到消息。请确认已打开一个对话；超长对话可向上滚动加载后再刷新。',
+      code: 'err.noMessages',
+    };
   }
 
   const conversation: ConversationInfo = { title, url, platform: chatgptAdapter.id };
@@ -663,11 +643,17 @@ async function seekToMessage(messageId: string, orderedIds: string[]): Promise<H
   // hunt oscillate — the virtualizer changes scrollHeight underfoot, so a computed
   // position is stale by the time it applies. Stepping can't overshoot by more than
   // one screen, which is why this lands on the first click instead of the third.
-  // The direction/pinning decisions are pure (lib/utils/seek-step, unit-tested).
   const step = Math.max(200, container.clientHeight * 0.8);
   for (let attempt = 0; attempt < 40; attempt += 1) {
-    let dir = seekDirection(targetOrder, mountedOrders());
-    if (dir === 0) {
+    const mounted = mountedOrders();
+    let dir = 0;
+    if (mounted.length === 0) {
+      dir = 1;
+    } else if (targetOrder < Math.min(...mounted)) {
+      dir = -1; // target is above what's mounted
+    } else if (targetOrder > Math.max(...mounted)) {
+      dir = 1; // target is below
+    } else {
       // Inside the mounted band but not painted yet — let it render, then nudge on.
       await wait(220);
       const late = document.querySelector<HTMLElement>(sel);
@@ -675,8 +661,9 @@ async function seekToMessage(messageId: string, orderedIds: string[]): Promise<H
       dir = 1;
     }
 
-    const next = nextSeekTop(top, dir, step, maxTop());
-    if (next === null) break; // pinned at an end and still nothing — give up cleanly
+    const extent = maxTop();
+    const next = Math.max(0, Math.min(extent, top + dir * step));
+    if (next === top) break; // pinned at an end and still nothing — give up cleanly
     top = next;
 
     beginProgrammaticScroll(1200); // keep the follow push muted for the whole hunt

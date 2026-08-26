@@ -8,24 +8,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- **Contract-drift diagnostics** — when the full backend read fails, the WHY
-  travels with it: an expired ChatGPT session and a changed response shape are
-  distinct failures now (「登录态已失效」 / 「接口或页面结构可能已变更」 instead of a
-  generic 「读取失败」). The classified reason (`auth` / `network` / `contract` /
-  `empty`) is also always in the console log, so a silent ChatGPT redesign can be
-  diagnosed from one glance.
-- **GitHub Actions CI** — typecheck, unit tests and build run on every push and
-  pull request.
-
-### Changed
-- The two historically bug-prone paths are now pure, unit-tested modules: the
-  conversation-tree walk that turns ChatGPT's mapping into ordered turns
-  (`lib/platform/conversation-walk`), and the virtualized-seek stepping decisions
-  (`lib/utils/seek-step`). **78 unit tests** (was 61).
-- The 便签 length cap lives in one place (`prefs.ts`) instead of being duplicated
-  in the component.
-
-### Added
 - **Live follow of a generating answer** — while ChatGPT is streaming, the panel
   quietly re-reads every ~70 seconds so the message list tracks the output as it
   grows, then does one catch-up read shortly after generation ends so the finished

@@ -5,22 +5,6 @@ import {
   type MwResponse,
   type MwRawMessage,
 } from '../lib/messaging/protocol';
-import { walkActiveBranch } from '../lib/platform/conversation-walk';
-
-/**
- * Why a full backend read failed, classified so the panel can say something
- * useful instead of a generic "读取失败" — this product's whole data path hangs
- * off ChatGPT's PRIVATE session/conversation endpoints, so when they change we
- * must be able to TELL (see docs: the contract-drift probe).
- */
-export type MwFailKind = 'auth' | 'network' | 'contract' | 'empty';
-
-/** An Error carrying its classification. */
-function classified(kind: MwFailKind, message: string): Error & { cdKind?: MwFailKind } {
-  const err = new Error(message) as Error & { cdKind?: MwFailKind };
-  err.cdKind = kind;
-  return err;
-}
 
 /**
  * Main World Capture Bridge.
@@ -148,14 +132,7 @@ export default defineUnlistedScript(() => {
     if (tokenCache && Date.now() < tokenCache.until) return tokenCache.value;
     const session = await fetchJsonRetry('/api/auth/session', { credentials: 'include' }, 2, 7000);
     const token: string | undefined = session?.accessToken;
-    if (!token) {
-      // Either the user is logged out, or the session payload changed shape —
-      // both mean "auth path broken", which is what the panel needs to know.
-      throw classified(
-        'auth',
-        'session returned no accessToken (logged out, or the session contract changed)',
-      );
-    }
+    if (!token) throw new Error('session returned no accessToken (are you logged in?)');
     tokenCache = { value: token, until: Date.now() + 4 * 60 * 1000 };
     return token;
   }
@@ -174,12 +151,7 @@ export default defineUnlistedScript(() => {
     const convId = location.pathname.match(/\/c\/([\w-]+)/)?.[1];
     if (!convId) throw new Error('no conversation id in URL (not on a /c/ page)');
 
-    let token: string;
-    try {
-      token = await getAccessToken();
-    } catch (err) {
-      throw classified('auth', String((err as Error)?.message ?? err));
-    }
+    const token = await getAccessToken();
 
     // The big one — give each try up to 15s (a huge thread's JSON is large), two tries.
     const load = (t: string) =>
@@ -195,29 +167,48 @@ export default defineUnlistedScript(() => {
     } catch (err) {
       // Most likely a cached token that expired — drop it and try once with a fresh one.
       tokenCache = null;
-      try {
-        conv = await load(await getAccessToken());
-      } catch (retryErr) {
-        void err;
-        // Preserve a more specific inner classification (e.g. auth) if there is one.
-        const kind = (retryErr as Error & { cdKind?: MwFailKind })?.cdKind ?? 'network';
-        throw classified(kind, String((retryErr as Error)?.message ?? retryErr));
-      }
+      conv = await load(await getAccessToken());
+      void err;
     }
     const mapping = conv?.mapping;
-    if (!mapping || typeof mapping !== 'object') {
-      // The conversation JSON no longer looks like a mapping tree — the clearest
-      // possible signal that ChatGPT changed its backend contract.
-      throw classified('contract', 'conversation had no mapping (contract drift?)');
-    }
+    if (!mapping || typeof mapping !== 'object') throw new Error('conversation had no mapping');
 
     // Walk ONLY the active branch (current node → root), so regenerated / edited
     // dead branches are excluded and the order is exactly what's shown on screen.
-    // Pure logic, unit-tested in lib/platform/conversation-walk.
-    const out = walkActiveBranch(mapping, conv.current_node);
-    if (out.length === 0) {
-      throw classified('empty', 'no user/assistant turns after filtering');
+    const path: any[] = [];
+    let id: string | undefined = conv.current_node;
+    let guard = 0;
+    while (id && mapping[id] && guard < 5000) {
+      path.push(mapping[id]);
+      id = mapping[id].parent;
+      guard += 1;
     }
+    path.reverse(); // root → leaf = display order
+
+    const out: MwRawMessage[] = [];
+    for (const node of path) {
+      const msg = node?.message;
+      if (!msg?.author) continue;
+      const role = msg.author.role;
+      if (role !== 'user' && role !== 'assistant') continue; // drop tool / system
+      if (msg.recipient && msg.recipient !== 'all') continue; // drop tool-directed
+      if (msg.metadata?.is_visually_hidden_from_conversation) continue; // drop hidden
+      if (msg.metadata?.is_thinking_preamble_message) continue; // "我先…" thinking preview, not the answer
+      const ctype = msg.content?.content_type;
+      if (ctype === 'thoughts' || ctype === 'reasoning_recap') continue; // internal reasoning, not shown
+      const text = partsToText(msg.content);
+      if (!text) continue;
+      // Merge consecutive same-role messages: ChatGPT can split one answer into
+      // several adjacent assistant nodes, which would otherwise show as a turn cut
+      // into pieces. Keep the first node's id; join the parts with a blank line.
+      const last = out[out.length - 1];
+      if (last && last.role === role) {
+        last.text = `${last.text}\n\n${text}`;
+      } else {
+        out.push({ id: msg.id, role, text });
+      }
+    }
+    if (out.length === 0) throw new Error('no user/assistant turns after filtering');
     return out;
   }
 
@@ -237,10 +228,7 @@ export default defineUnlistedScript(() => {
             messages: messages ?? [],
           }),
         )
-        .catch((err) => {
-          const e = err as Error & { cdKind?: MwFailKind };
-          respond({ id: detail.id, ok: false, error: String(err), failKind: e?.cdKind });
-        });
+        .catch((err) => respond({ id: detail.id, ok: false, error: String(err) }));
       return;
     }
 

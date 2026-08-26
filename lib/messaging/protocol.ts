@@ -44,28 +44,11 @@ export type ErrorCode =
   | 'err.noResponse'
   | 'err.noContentScript'
   | 'err.noMessages'
-  | 'err.loginExpired'
-  | 'err.contractChanged'
   | 'err.fillFailed'
   | 'err.unknownRequest'
   | 'err.scrollNotFound'
   | 'err.focusChatgptTab'
   | 'err.reloadNoMessages';
-
-/**
- * Why the FULL backend read failed, classified by the main-world bridge. The
- * extension hangs off ChatGPT's private endpoints, so when they change we must
- * be able to say so — a generic "读取失败" hides the actual breakage.
- */
-export type MwFailKind =
-  /** Session/token path broken (logged out, or the session payload changed). */
-  | 'auth'
-  /** Requests failed outright after retries (rate limit, network, hang). */
-  | 'network'
-  /** The conversation JSON no longer matches the expected shape — drift. */
-  | 'contract'
-  /** Parsed fine but nothing user-visible survived the filters. */
-  | 'empty';
 
 export type PanelResponse =
   | { kind: 'pong'; platform: string }
@@ -157,6 +140,4 @@ export interface MwResponse {
   title?: string;
   messages?: MwRawMessage[];
   error?: string;
-  /** Set when `ok` is false: why the requested extraction failed. */
-  failKind?: 'auth' | 'network' | 'contract' | 'empty';
 }
