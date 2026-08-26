@@ -74,14 +74,13 @@ export function App() {
   // A partial (DOM) read only sees what ChatGPT has mounted. When the user scrolls
   // up and the page loads older turns, the content script says so and we quietly
   // re-read, so the list grows on its own instead of needing a manual refresh.
-  // Background reads settle back to 'ready' on failure instead of erroring.
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | undefined;
     const onMsg = (msg: unknown): undefined => {
       const m = msg as { kind?: string } | undefined;
       if (m?.kind !== 'conversation-grew') return undefined;
       if (timer) clearTimeout(timer);
-      timer = setTimeout(() => void actions.loadConversation(true, { background: true }), 400);
+      timer = setTimeout(() => void actions.loadConversation(true), 400);
       return undefined;
     };
     browser.runtime.onMessage.addListener(onMsg);
@@ -90,74 +89,6 @@ export function App() {
       if (timer) clearTimeout(timer);
     };
   }, [actions]);
-
-  // Live follow of a generating answer: while ChatGPT is streaming, quietly
-  // re-read every ~70s (within the requested 1–1.5min cadence) so the list
-  // tracks the output; one catch-up read shortly after generation ends captures
-  // the completed answer. Driven by 'stream-change' pushes from the page.
-  const streamActiveRef = useRef(false);
-  // The end-of-stream catch-up lives in a REF, not in the effect body: the
-  // effect re-subscribes on every status flip (each background read toggles
-  // loading→ready), and an effect-local timer would be cancelled mid-wait by
-  // its own cleanup — losing the final catch-up exactly when it matters.
-  const streamFinalRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  useEffect(() => {
-    const REFRESH_MS = 70_000;
-    let poll: ReturnType<typeof setInterval> | undefined;
-    const stopPoll = () => {
-      if (poll) {
-        clearInterval(poll);
-        poll = undefined;
-      }
-    };
-    const maybeStart = () => {
-      if (!poll && streamActiveRef.current && state.status === 'ready') {
-        poll = setInterval(
-          () => void actions.loadConversation(true, { background: true }),
-          REFRESH_MS,
-        );
-      }
-    };
-    const onMsg = (msg: unknown): undefined => {
-      const m = msg as { kind?: string; active?: boolean } | undefined;
-      if (m?.kind !== 'stream-change') return undefined;
-      streamActiveRef.current = !!m.active;
-      if (m.active) {
-        // A new answer started: cancel any pending end-of-stream catch-up.
-        if (streamFinalRef.current) {
-          clearTimeout(streamFinalRef.current);
-          streamFinalRef.current = undefined;
-        }
-        maybeStart();
-      } else {
-        stopPoll();
-        if (!streamFinalRef.current && state.status === 'ready') {
-          // Generation ended — give the page a moment to finalize the message,
-          // then read once so the finished text lands in the panel.
-          streamFinalRef.current = setTimeout(
-            () => void actions.loadConversation(true, { background: true }),
-            3500,
-          );
-        }
-      }
-      return undefined;
-    };
-    browser.runtime.onMessage.addListener(onMsg);
-    // Ask the page once whether a generation is ALREADY running: its start push
-    // fired before this panel existed, so without this query a freshly-opened
-    // panel would sit out the rest of an ongoing stream.
-    void sendToActiveTab({ kind: 'get-stream' }).then((res) => {
-      if (res.kind === 'stream') {
-        streamActiveRef.current = res.active;
-        maybeStart();
-      }
-    });
-    maybeStart(); // a stream may already be running across a status flip
-    return () => {
-      stopPoll();
-      browser.runtime.onMessage.removeListener(onMsg);
-    };
-  }, [actions, state.status]);
 
   // Sync the panel's light/dark theme to ChatGPT's own, so it feels native even
   // when ChatGPT's theme differs from the OS preference. Query once on open, then
@@ -250,17 +181,6 @@ export function App() {
       cancelled = true;
     };
   }, [state.hydrated, state.status, handleLoad]);
-
-  // Every successful read lands the list on its LATEST message, INSTANTLY (no
-  // smooth glide): a refresh exists to fetch new turns, so the newest one is
-  // where the eye belongs — and the jump must be atomic, not an animation the
-  // user has to watch or scroll back from.
-  const mainRef = useRef<HTMLElement | null>(null);
-  useEffect(() => {
-    if (state.status !== 'ready' || state.messages.length === 0) return;
-    const el = mainRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, [state.status, state.messages]);
 
   // Marked messages (读时标记) still present in the read conversation, compiled
   // into their own 【标记】 section (message order applied in the compiler).
@@ -485,7 +405,7 @@ export function App() {
         <Scratchpad value={state.scratchpad} onCommit={actions.setScratchpad} />
       )}
 
-      <main className="app-main" ref={mainRef}>
+      <main className="app-main">
         {state.status === 'idle' && (
           <div className="intro">
             <h1>{t('intro.title')}</h1>
@@ -497,13 +417,7 @@ export function App() {
           </div>
         )}
 
-        {/* A refresh must NOT tear the list down: unmounting it collapses the
-            scroll container and the viewport resets to the oldest message. Keep
-            the previous read on screen (spinner shows in the top bar) and only
-            show this placeholder before anything has been read. */}
-        {state.status === 'loading' && state.messages.length === 0 && (
-          <p className="muted center">{t('status.loading')}</p>
-        )}
+        {state.status === 'loading' && <p className="muted center">{t('status.loading')}</p>}
 
         {state.status === 'error' && (
           <div className="notice notice-error">
@@ -517,7 +431,7 @@ export function App() {
           </div>
         )}
 
-        {state.messages.length > 0 && (
+        {state.status === 'ready' && (
           <>
             <section className="section">
               <div className="eyebrow">{t('section.messages')}</div>

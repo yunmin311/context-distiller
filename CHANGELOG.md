@@ -7,23 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
-- **Live follow of a generating answer** — while ChatGPT is streaming, the panel
-  quietly re-reads every ~70 seconds so the list tracks the output as it grows;
-  one catch-up read shortly after generation ends captures the finished text.
-  Stream start/stop is detected from the page itself (the composer's stop button /
-  the streaming class), and a freshly-opened panel asks the page directly so it
-  can join an already-running stream. These background reads never surface an
-  error screen or a toast.
-
-### Fixed
-- **Refreshing no longer scrolls the list back to its oldest message.** The
-  previous read stays mounted while loading (the top-bar spinner shows activity),
-  and every successful read lands on the **latest** message instantly — an
-  atomic jump, no animation, nothing to scroll back from.
-- A failed *background* re-read silently returns to the prior view instead of
-  leaving the panel stuck in 「读取中」.
-
 ## [1.2.0] — 2026-08-21
 
 ### Added
