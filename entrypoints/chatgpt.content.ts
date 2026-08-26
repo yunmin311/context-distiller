@@ -314,7 +314,7 @@ async function handle(message: PanelRequest): Promise<PanelResponse> {
     case 'ping':
       return { kind: 'pong', platform: chatgptAdapter.id };
     case 'get-conversation':
-      return getConversation();
+      return getConversation(message);
     case 'get-selection':
       try {
         return { kind: 'selection', ok: true, selection: readSelection() };
@@ -340,12 +340,14 @@ async function handle(message: PanelRequest): Promise<PanelResponse> {
     }
     case 'get-stream':
       return { kind: 'stream', active: isGenerating() };
+    case 'deep-walk-step':
+      return deepWalkStep(message.toTop === true);
     default:
       return { kind: 'error', error: '未知请求', code: 'err.unknownRequest' };
   }
 }
 
-async function getConversation(): Promise<PanelResponse> {
+async function getConversation(message: PanelRequest & { kind: 'get-conversation' }): Promise<PanelResponse> {
   const url = location.href;
   const title = chatgptAdapter.getConversationTitle();
 
@@ -353,18 +355,18 @@ async function getConversation(): Promise<PanelResponse> {
   let source: MessageSource;
   let partial: boolean;
 
-  // FAST-FIRST, two stages (the behavior that felt right on huge threads):
-  //   Stage 1 — race the full backend read against a SHORT budget. If the
-  //   endpoint is slow or tarpitting us, show what's mounted RIGHT NOW instead
-  //   of a half-minute spinner.
-  //   Stage 2 — the backend read keeps running in the background (bounded by
-  //   the bridge's own retries); when it lands we push conversation-grew so the
-  //   panel quietly re-reads and upgrades to the FULL thread. No second click.
-  const apiPromise = requestMainWorld(40000, 'extract-api');
-  const api = await Promise.race([
-    apiPromise,
-    new Promise<null>((resolve) => setTimeout(() => resolve(null), 6000)),
-  ]);
+  // DOM-ONLY mode (deep-load walk): skip the backend entirely — zero pressure
+  // on a throttling endpoint, and each walk step returns in milliseconds.
+  const domOnly = message.domOnly === true;
+  const apiPromise = domOnly
+    ? null
+    : requestMainWorld(40000, 'extract-api');
+  const api = apiPromise
+    ? await Promise.race([
+        apiPromise,
+        new Promise<null>((resolve) => setTimeout(() => resolve(null), 4000)),
+      ])
+    : null;
 
   if (api?.ok && api.messages && api.messages.length > 0) {
     raw = api.messages.map((m) => ({
@@ -407,35 +409,31 @@ async function getConversation(): Promise<PanelResponse> {
     }
     partial = true;
 
-    // Stage 2 — report the outcome of the background full read.
-    void apiPromise.then((late) => {
-      console.info(
-        '[Context Distiller][stage2] background read settled:',
-        late === null
-          ? 'null (outer timeout)'
-          : 'ok=' + late.ok + ' msgs=' + (late.messages?.length ?? 0) + ' err=' + (late.error ?? '-'),
-        'sameUrl=', location.href === url,
-      );
-      if (location.href !== url) return; // user moved on to another conversation
-      if (late?.ok && late.messages && late.messages.length > 0) {
-        console.info('[Context Distiller] late FULL read arrived — panel will upgrade itself');
-        try {
-          void browser.runtime
-            .sendMessage({
-              kind: 'conversation-grew',
-              mounted: document.querySelectorAll('[data-message-author-role]').length,
-            })
-            .catch(() => {});
-        } catch {
-          // context gone between check and send — ignore
+    // Stage 2 — report the outcome of the background full read (never in
+    // DOM-ONLY mode: there is no background read by design).
+    if (apiPromise) {
+      void apiPromise.then((late) => {
+        if (location.href !== url) return; // user moved on to another conversation
+        if (late?.ok && late.messages && late.messages.length > 0) {
+          console.info('[Context Distiller] late FULL read arrived — panel will upgrade itself');
+          try {
+            void browser.runtime
+              .sendMessage({
+                kind: 'conversation-grew',
+                mounted: document.querySelectorAll('[data-message-author-role]').length,
+              })
+              .catch(() => {});
+          } catch {
+            // context gone between check and send — ignore
+          }
+        } else {
+          console.info(
+            '[Context Distiller] background full read failed:',
+            late ? late.error ?? 'unknown' : 'no answer within 40s',
+          );
         }
-      } else {
-        console.info(
-          '[Context Distiller] background full read failed:',
-          late ? late.error ?? 'unknown' : 'no answer within 40s',
-        );
-      }
-    });
+      });
+    }
   }
 
   document.documentElement.setAttribute(
@@ -465,6 +463,36 @@ async function getConversation(): Promise<PanelResponse> {
   return { kind: 'conversation', ok: true, conversation, messages, partial, source };
 }
 
+/** Small await helper shared by the seek and the deep-load walk. */
+const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
+/**
+ * One step of the DEEP LOAD walk (panel-driven). ChatGPT virtualizes long
+ * threads, so when the backend read is throttled the only way to see EVERYTHING
+ * is to walk the page: jump to the oldest message, then scroll one viewport at
+ * a time toward the newest while the panel merges each partial read.
+ * Programmatic-scroll muting covers the whole walk so Follow never fights it.
+ */
+async function deepWalkStep(toTop: boolean): Promise<PanelResponse> {
+  const container = findScrollContainer();
+  const maxTop = () => Math.max(0, container.scrollHeight - container.clientHeight);
+  beginProgrammaticScroll(2000);
+  if (toTop) {
+    container.scrollTo({ top: 0, behavior: 'auto' });
+    await sleep(450);
+    return { kind: 'deep-walk', ok: true, reachedEnd: maxTop() < 10 };
+  }
+  const before = container.scrollTop;
+  container.scrollTo({
+    top: Math.min(maxTop(), before + container.clientHeight * 0.9),
+    behavior: 'auto',
+  });
+  await sleep(380);
+  const after = container.scrollTop;
+  const reachedEnd = after >= maxTop() - 4 || after <= before + 2;
+  return { kind: 'deep-walk', ok: true, reachedEnd };
+}
+
 /**
  * Scroll the ChatGPT page to a message and flash a ring around it. PURE, LOCAL
  * scroll of the page the user already has open — no network request, no message
@@ -487,7 +515,7 @@ async function scrollToMessage(messageId: string, orderedIds?: string[]): Promis
     // first pass leaves the list warmed up and measured, so the retry lands.
     el = await seekToMessage(messageId, orderedIds);
     if (!el) {
-      await new Promise<void>((r) => setTimeout(r, 250));
+      await new Promise<void>((r) => setTimeout(r, 200));
       el = await seekToMessage(messageId, orderedIds);
     }
   }
@@ -509,7 +537,7 @@ async function scrollToMessage(messageId: string, orderedIds?: string[]): Promis
     beginProgrammaticScroll(900);
     settled.scrollIntoView({ block: 'center', behavior: 'auto' });
     flashElement(settled);
-  }, 320);
+  }, 240);
   return { kind: 'scroll-result', ok: true };
 }
 
@@ -678,7 +706,7 @@ async function seekToMessage(messageId: string, orderedIds: string[]): Promise<H
   let top = (targetOrder / Math.max(1, orderedIds.length - 1)) * maxTop();
   beginProgrammaticScroll(1500);
   container.scrollTo({ top, behavior: 'auto' });
-  await wait(320);
+  await wait(260);
   const early = document.querySelector<HTMLElement>(sel);
   if (early) return early;
 
@@ -698,7 +726,7 @@ async function seekToMessage(messageId: string, orderedIds: string[]): Promise<H
       dir = 1; // target is below
     } else {
       // Inside the mounted band but not painted yet — let it render, then nudge on.
-      await wait(220);
+      await wait(200);
       const late = document.querySelector<HTMLElement>(sel);
       if (late) return late;
       dir = 1;
@@ -711,7 +739,7 @@ async function seekToMessage(messageId: string, orderedIds: string[]): Promise<H
 
     beginProgrammaticScroll(1200); // keep the follow push muted for the whole hunt
     container.scrollTo({ top, behavior: 'auto' });
-    await wait(260);
+    await wait(210);
 
     const hit = document.querySelector<HTMLElement>(sel);
     if (hit) return hit;
@@ -745,6 +773,7 @@ function readSelection(): SelectionPayload | null {
     sourceOrder,
   };
 }
+
 
 
 

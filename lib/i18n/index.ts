@@ -84,6 +84,8 @@ const zh = {
   'err.noContentScript':
     '无法与页面通信。请在 ChatGPT（chatgpt.com）对话页打开侧边栏，必要时刷新页面。',
   'err.noMessages': '未读取到消息。请确认已打开一个对话；超长对话可向上滚动加载后再刷新。',
+  'toast.deepStart': '深度加载：正在从头扫描整条对话…',
+  'toast.deepDone': '深度加载完成：共 {count} 条',
   'err.fillFailed': '未能写入输入框，请改用“复制完整消息”。',
   'err.unknownRequest': '未知请求',
   'err.scrollNotFound': '这条当前找不到（可能刚被折叠/虚拟化），刷新页面后再试。',
@@ -251,6 +253,8 @@ const en: Record<UIKey, string> = {
     'Cannot talk to the page. Open the side panel on a ChatGPT (chatgpt.com) conversation, and refresh the page if needed.',
   'err.noMessages':
     'No messages found. Make sure a conversation is open; for a very long thread, scroll up to load more and refresh.',
+  'toast.deepStart': 'Deep load: scanning the whole conversation from the top…',
+  'toast.deepDone': 'Deep load complete: {count} messages',
   'err.fillFailed': 'Could not write to the composer — use “Copy the full message” instead.',
   'err.unknownRequest': 'Unknown request',
   'err.scrollNotFound':

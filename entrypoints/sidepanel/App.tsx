@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+﻿import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { compile } from '../../lib/core/compiler';
 import type { ConversationMessage } from '../../lib/core/types';
 import { isUIKey, t as translate, type UIKey } from '../../lib/i18n';
@@ -199,10 +199,11 @@ export function App() {
     async (silent = false) => {
       // A read can land before the page's content script is listening, or while a
       // heavy conversation is still rendering. Keep RETRYING QUIETLY (the panel
-      // stays in its loading state) with a growing backoff — up to ~14s — instead
-      // of declaring failure the instant a busy page hasn't answered yet. Only the
-      // final attempt is allowed to surface an error.
-      const BACKOFF = [400, 700, 1200, 1800, 2500, 3500, 4000];
+      // stays in its loading state) with a growing backoff — up to ~30s — instead
+      // of declaring failure the instant a busy page hasn't answered yet. Only
+      // the final attempt is allowed to surface an error. Slow networks need
+      // this patience: erroring early just bounces the user into a retry loop.
+      const BACKOFF = [400, 700, 1200, 1800, 2500, 3500, 4000, 5000, 6500, 8000];
       let res = await actions.loadConversation(true);
       for (let attempt = 0; !res.ok && attempt < BACKOFF.length; attempt += 1) {
         await new Promise<void>((r) => setTimeout(r, BACKOFF[attempt]));
@@ -232,6 +233,70 @@ export function App() {
       });
     }
   }, [actions, t]);
+
+  // DEEP LOAD — the escape hatch for throttled / giant threads: walk the page
+  // from the oldest message to the newest, merging every partial read, until a
+  // full read lands or the walk stops finding anything new. Triggered by
+  // clicking the refresh button THREE times in a row.
+  const deepLoadingRef = useRef(false);
+  const conversationUrlRef = useRef<string | undefined>(undefined);
+  conversationUrlRef.current = state.conversation?.url;
+  const runDeepLoad = useCallback(async () => {
+    if (deepLoadingRef.current) return;
+    deepLoadingRef.current = true;
+    const startUrl = conversationUrlRef.current;
+    setToast({ text: t('toast.deepStart'), tone: 'ok' });
+    try {
+      // Jump the page to its oldest message first.
+      await sendToActiveTab({ kind: 'deep-walk-step', toTop: true });
+      let prevCount = -1;
+      let staleSteps = 0;
+      for (let step = 0; step < 80; step += 1) {
+        if (conversationUrlRef.current !== startUrl) return; // user switched away
+        const res = await actions.loadConversation(true, { background: true, merge: true, domOnly: true });
+        if (res.ok && !res.partial) break; // the backend gave us EVERYTHING
+        const stepRes = await sendToActiveTab({ kind: 'deep-walk-step' });
+        const count = latestRef.current.messages.length;
+        const ended = stepRes.kind === 'deep-walk' && stepRes.ok && stepRes.reachedEnd;
+        if (ended) {
+          if (count === prevCount) {
+            staleSteps += 1;
+            if (staleSteps >= 2) break; // bottom, and nothing new twice — done
+          } else {
+            staleSteps = 0;
+          }
+          prevCount = count;
+          // One extra merge read at the bottom captures the newest turns.
+          await actions.loadConversation(true, { background: true, merge: true, domOnly: true });
+        }
+        await new Promise((r) => setTimeout(r, 250));
+      }
+      // Walk done: ONE normal (backend) read to finish — if the endpoint has
+      // recovered it replaces the merged list with the authoritative full thread;
+      // if it is still throttled the merged walk result stays on screen.
+      await actions.loadConversation(true, { background: true, merge: true });
+      setToast({
+        text: t('toast.deepDone', { count: latestRef.current.messages.length }),
+        tone: 'ok',
+      });
+    } finally {
+      deepLoadingRef.current = false;
+    }
+  }, [actions, t]);
+
+  const refreshClicksRef = useRef<number[]>([]);
+  const handleRefreshClick = useCallback(() => {
+    const now = Date.now();
+    const clicks = refreshClicksRef.current.filter((ts) => now - ts < 900);
+    clicks.push(now);
+    refreshClicksRef.current = clicks;
+    if (clicks.length >= 3) {
+      refreshClicksRef.current = [];
+      void runDeepLoad();
+      return;
+    }
+    void handleLoad();
+  }, [handleLoad, runDeepLoad]);
 
   // Auto-read on open when the active tab is a ChatGPT page, so the panel lands
   // straight on the messages instead of an extra click. Runs once, AFTER config +
@@ -469,7 +534,7 @@ export function App() {
           className="icon-btn topbar-refresh"
           title={t('top.refresh')}
           aria-label={t('top.refreshAria')}
-          onClick={() => handleLoad()}
+          onClick={handleRefreshClick}
         >
           {state.status === 'loading' ? (
             <span className="spin">
@@ -636,3 +701,4 @@ export function App() {
     </LangProvider>
   );
 }
+

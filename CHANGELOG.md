@@ -1,4 +1,4 @@
-# Changelog
+﻿# Changelog
 
 All notable changes to Context Distiller are documented here.
 
@@ -8,8 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- **Fast-first two-stage read** — a refresh no longer blocks on a slow backend.
-  Within ~6 seconds the panel shows the turns ChatGPT has mounted right now,
+- **DEEP LOAD — 三连击刷新** — for giant or throttled threads: click the refresh
+  button **three times in a row** and the panel walks the ChatGPT page itself —
+  jump to the oldest message, then scroll viewport by viewport toward the
+  newest, **merging every partial read** — until the whole thread is captured.
+  Each step is DOM-only (zero requests to a throttling endpoint) and the walk
+  ends with one normal read that upgrades to the authoritative full thread if
+  the backend has recovered. Verified: 60-message virtualized thread fully
+  captured in ~6s with the backend hanging the entire time.
+- **Fast-first two-stage read** — a refresh no longer blocks on a slow backend. The quick stage now answers within ~4s.
+  Within ~4 seconds the panel shows the turns ChatGPT has mounted right now,
   while the full backend read continues in the background; when it lands, the
   panel **upgrades itself to the complete thread automatically** — no second
   click. This restores the snappy "partial first, full moments later" feel on
@@ -308,3 +316,4 @@ to the user. Local-only — no model API, no server, no tracking, never auto-sen
 [0.3.0]: https://github.com/yunmin311/context-distiller/releases/tag/v0.3.0
 [0.2.0]: https://github.com/yunmin311/context-distiller/releases/tag/v0.2.0
 [0.1.0]: https://github.com/yunmin311/context-distiller/releases/tag/v0.1.0
+

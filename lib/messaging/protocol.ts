@@ -1,4 +1,4 @@
-import type { ConversationInfo, ConversationMessage, MessageSource } from '../core/types';
+﻿import type { ConversationInfo, ConversationMessage, MessageSource } from '../core/types';
 
 /**
  * Typed message protocol for the three hops in the extension:
@@ -12,13 +12,17 @@ import type { ConversationInfo, ConversationMessage, MessageSource } from '../co
 
 export type PanelRequest =
   | { kind: 'ping' }
-  | { kind: 'get-conversation' }
+  | { kind: 'get-conversation'; domOnly?: boolean }
   | { kind: 'get-selection' }
   | { kind: 'fill-composer'; text: string }
   | { kind: 'get-theme' }
   /** Is ChatGPT generating right now? Lets a freshly-opened panel join an
    *  already-running stream (the start push fired before the panel existed). */
   | { kind: 'get-stream' }
+  /** One step of the DEEP LOAD walk: toTop jumps to the oldest message,
+   *  otherwise scrolls one viewport DOWN toward the newest. `reachedEnd` says
+   *  the scroller hit the bottom (nothing more to load by scrolling). */
+  | { kind: 'deep-walk-step'; toTop?: boolean }
   | {
       kind: 'scroll-to-message';
       messageId: string;
@@ -77,6 +81,8 @@ export type PanelResponse =
       accent?: string | null;
     }
   | { kind: 'stream'; active: boolean }
+  | { kind: 'deep-walk'; ok: true; reachedEnd: boolean }
+  | { kind: 'deep-walk'; ok: false; error: string; code?: ErrorCode }
   | { kind: 'error'; error: string; code?: ErrorCode };
 
 // --- Content Script  ->  Side Panel (push, chrome.runtime.sendMessage) -----
@@ -145,3 +151,4 @@ export interface MwResponse {
   messages?: MwRawMessage[];
   error?: string;
 }
+

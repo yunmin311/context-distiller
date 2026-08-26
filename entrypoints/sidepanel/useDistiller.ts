@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useReducer, useRef } from 'react';
+﻿import { useCallback, useEffect, useMemo, useReducer, useRef } from 'react';
 import type {
   ConversationInfo,
   ConversationMessage,
@@ -159,6 +159,8 @@ type Action =
     }
   | { type: 'load-error'; error: string; code?: UIKey }
   | { type: 'load-abort' }
+  | { type: 'merge-messages'; messages: ConversationMessage[] }
+  | { type: 'load-abort' }
   | { type: 'reset' }
   | { type: 'add-fragment'; groupId: string; fragment: Fragment }
   | { type: 'remove-fragment'; groupId: string; fragmentId: string }
@@ -239,6 +241,20 @@ function reducer(state: DistillerState, action: Action): DistillerState {
         error: undefined,
         errorCode: undefined,
       };
+
+    case 'merge-messages': {
+      // DEEP LOAD step: union of what we had with the fresh partial read, by
+      // message id. On conflicting ids keep the LONGER text (a later read may
+      // have captured a turn more completely). Marks survive untouched — they
+      // reference ids that only ever grow here.
+      const byId = new Map(state.messages.map((m) => [m.id, m] as const));
+      for (const m of action.messages) {
+        const prev = byId.get(m.id);
+        byId.set(m.id, !prev || m.text.length > prev.text.length ? m : prev);
+      }
+      const merged = [...byId.values()].sort((a, b) => a.order - b.order);
+      return { ...state, messages: merged };
+    }
 
     case 'reset':
       return {
@@ -618,7 +634,7 @@ export function useDistiller() {
   const loadConversation = useCallback(
     async (
       quiet = false,
-      opts?: { background?: boolean },
+      opts?: { background?: boolean; merge?: boolean; domOnly?: boolean },
     ): Promise<{
       ok: boolean;
       count: number;
@@ -627,15 +643,21 @@ export function useDistiller() {
       code?: UIKey;
     }> => {
       dispatch({ type: 'load-start' });
-      const res = await sendToActiveTab({ kind: 'get-conversation' });
+      const res = await sendToActiveTab({ kind: 'get-conversation', domOnly: opts?.domOnly === true });
       if (res.kind === 'conversation' && res.ok) {
-        dispatch({
-          type: 'load-success',
-          conversation: res.conversation,
-          messages: res.messages,
-          partial: res.partial,
-          source: res.source,
-        });
+        if (opts?.merge && res.partial) {
+          // DEEP LOAD step: grow the list instead of replacing it, so walking
+          // the page accumulates the whole thread across partial reads.
+          dispatch({ type: 'merge-messages', messages: res.messages });
+        } else {
+          dispatch({
+            type: 'load-success',
+            conversation: res.conversation,
+            messages: res.messages,
+            partial: res.partial,
+            source: res.source,
+          });
+        }
         return { ok: true, count: res.messages.length, partial: res.partial };
       }
       const failed =
@@ -666,7 +688,7 @@ export function useDistiller() {
         });
         return { ok: false, count: 0, partial: false };
       }
-      for (let attempt = 0; attempt < 14; attempt += 1) {
+      for (let attempt = 0; attempt < 30; attempt += 1) {
         await delay(700);
         const res = await sendToActiveTab({ kind: 'get-conversation' });
         if (res.kind === 'conversation' && res.ok) {
@@ -783,3 +805,4 @@ export function useDistiller() {
 
   return { state, actions };
 }
+
