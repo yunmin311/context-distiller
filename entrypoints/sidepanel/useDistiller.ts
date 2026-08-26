@@ -253,7 +253,14 @@ function reducer(state: DistillerState, action: Action): DistillerState {
         byId.set(m.id, !prev || m.text.length > prev.text.length ? m : prev);
       }
       const merged = [...byId.values()].sort((a, b) => a.order - b.order);
-      return { ...state, messages: merged };
+      // Back to 'ready': the merge IS the completion of this background read.
+      // Leaving 'loading' here kept the spinner alive forever AND gated the
+      // viewport-anchor effect (which only runs when ready).
+      return {
+        ...state,
+        status: 'ready',
+        messages: merged,
+      };
     }
 
     case 'reset':

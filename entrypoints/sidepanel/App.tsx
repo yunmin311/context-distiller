@@ -75,12 +75,42 @@ export function App() {
   // up and the page loads older turns, the content script says so and we quietly
   // re-read, so the list grows on its own instead of needing a manual refresh.
   // Background reads settle back to 'ready' on failure instead of erroring.
+  // The viewport ANCHORS to the row the user is reading — growth must never
+  // yank them to the bottom.
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | undefined;
     const onMsg = (msg: unknown): undefined => {
       const m = msg as { kind?: string } | undefined;
       if (m?.kind !== 'conversation-grew') return undefined;
       if (timer) clearTimeout(timer);
+      // Remember WHERE the user is so the post-read snap can restore it: the
+      // topmost visible message row when there is one, otherwise their exact
+      // scroll offset (they were in the workspace / presets area).
+      try {
+        const el = mainRef.current;
+        const rows = el?.querySelectorAll('.msg');
+        if (el && rows) {
+          const top = el.getBoundingClientRect().top;
+          let anchored = false;
+          for (const r of rows) {
+            if (r.getBoundingClientRect().top >= top - 1) {
+              const id = r.getAttribute('data-mid');
+              if (id) {
+                snapIntentRef.current = { anchor: id };
+                anchored = true;
+              }
+              break;
+            }
+          }
+          if (!anchored) {
+            snapIntentRef.current = {
+              preserve: { top: el.scrollTop, sh: el.scrollHeight },
+            };
+          }
+        }
+      } catch {
+        // anchoring is best-effort — default snap applies otherwise
+      }
       timer = setTimeout(() => void actions.loadConversation(true, { background: true }), 400);
       return undefined;
     };
@@ -369,14 +399,36 @@ export function App() {
   }, [handleLoad, state.conversation?.url]);
 
   // Every successful read lands the list on its LATEST message, INSTANTLY (no
-  // smooth glide): a refresh exists to fetch new turns, so the newest one is
-  // where the eye belongs — and the jump must be atomic, not an animation the
-  // user has to watch or scroll back from.
+  // smooth glide) — EXCEPT when a read was triggered by scroll-up growth: there
+  // the user is reading OLD turns, and yanking them to the bottom is hostile.
+  // For that case the viewport is ANCHORED to the row they were reading, or —
+  // when no message row was visible (they were in the workspace/presets area) —
+  // their exact scroll offset is preserved through the re-read.
+  // Callers declare intent in snapIntentRef; the effect consumes it.
   const mainRef = useRef<HTMLElement | null>(null);
+  const snapIntentRef = useRef<
+    'bottom' | { anchor: string } | { preserve: { top: number; sh: number } }
+  >('bottom');
   useEffect(() => {
     if (state.status !== 'ready' || state.messages.length === 0) return;
     const el = mainRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
+    if (!el) return;
+    const intent = snapIntentRef.current;
+    snapIntentRef.current = 'bottom';
+    if (typeof intent === 'object' && 'anchor' in intent) {
+      const row = el.querySelector(`.msg[data-mid="${CSS.escape(intent.anchor)}"]`);
+      if (row) {
+        row.scrollIntoView({ block: 'start', behavior: 'auto' });
+        return;
+      }
+    }
+    if (typeof intent === 'object' && 'preserve' in intent) {
+      // Rows were added ABOVE the viewport — keep the same content under the
+      // user's eyes by compensating for the height the prepend added.
+      el.scrollTop = intent.preserve.top + (el.scrollHeight - intent.preserve.sh);
+      return;
+    }
+    el.scrollTop = el.scrollHeight;
   }, [state.status, state.messages]);
 
   // Marked messages (读时标记) still present in the read conversation, compiled
