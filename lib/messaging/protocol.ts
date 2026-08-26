@@ -105,16 +105,6 @@ export interface ThemePush {
   accent?: string | null;
 }
 
-/**
- * Pushed when ChatGPT STARTS or STOPS generating (streaming) an answer, so the
- * panel can quietly re-read on a slow cadence while output is live and do one
- * catch-up read after it ends. Fire-and-forget like the other pushes.
- */
-export interface StreamChangePush {
-  kind: 'stream-change';
-  active: boolean;
-}
-
 // --- Content Script  <->  Main World Bridge (window CustomEvent) ----------
 
 export const MW_REQUEST_EVENT = 'cd:mw-request';

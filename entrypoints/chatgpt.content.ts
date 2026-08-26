@@ -13,7 +13,6 @@ import {
   type ActiveMessagePush,
   type ThemePush,
   type ConversationGrewPush,
-  type StreamChangePush,
 } from '../lib/messaging/protocol';
 
 /**
@@ -55,7 +54,6 @@ export default defineContentScript({
     setupFollow(ctx);
     setupThemeSync(ctx);
     setupGrowthWatch(ctx);
-    setupStreamWatch(ctx);
   },
 });
 
@@ -128,57 +126,6 @@ function setupThemeSync(ctx: {
     attributeFilter: ['class', 'style', 'data-theme'],
   });
   ctx.onInvalidated(() => observer.disconnect());
-}
-
-/**
- * Is ChatGPT currently generating (streaming) an answer? Two independent page
- * signals: the composer swaps its send button for a STOP button while generating,
- * and the growing answer carries the streaming highlight class. Either alone is
- * treated as active, so a rename of one can't blind us.
- */
-function isGenerating(): boolean {
-  return !!document.querySelector('[data-testid="stop-button"], .result-streaming');
-}
-
-/**
- * Report stream start/stop to the panel, so it can quietly re-read on a slow
- * cadence while an answer is being generated and do one catch-up read after it
- * ends. Pushed only on CHANGES (debounced — generation churns the DOM constantly).
- */
-function setupStreamWatch(ctx: {
-  isInvalid: boolean;
-  onInvalidated: (cb: () => void) => void;
-}): void {
-  let last: boolean | null = null;
-  let timer: number | undefined;
-  const check = () => {
-    timer = undefined;
-    if (ctx.isInvalid) return;
-    const active = isGenerating();
-    if (active === last) return;
-    last = active;
-    const msg: StreamChangePush = { kind: 'stream-change', active };
-    try {
-      void browser.runtime.sendMessage(msg).catch(() => {});
-    } catch {
-      // context gone between the check and the send — ignore
-    }
-  };
-  const observer = new MutationObserver(() => {
-    if (timer) clearTimeout(timer);
-    timer = window.setTimeout(check, 350); // let bursts of DOM churn settle first
-  });
-  observer.observe(document.body, {
-    childList: true,
-    subtree: true,
-    attributes: true,
-    attributeFilter: ['class'],
-  });
-  check();
-  ctx.onInvalidated(() => {
-    observer.disconnect();
-    if (timer) clearTimeout(timer);
-  });
 }
 
 /**
