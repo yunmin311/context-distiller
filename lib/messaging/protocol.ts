@@ -16,9 +16,6 @@ export type PanelRequest =
   | { kind: 'get-selection' }
   | { kind: 'fill-composer'; text: string }
   | { kind: 'get-theme' }
-  /** Is ChatGPT generating right now? Lets a freshly-opened panel join an
-   *  already-running stream (the start push fired before the panel existed). */
-  | { kind: 'get-stream' }
   | {
       kind: 'scroll-to-message';
       messageId: string;
@@ -90,10 +87,9 @@ export type PanelResponse =
       kind: 'theme';
       theme: 'light' | 'dark';
       /** ChatGPT's own accent / primary color, when the page exposes a non-grey
-       *  one; null when its UI is monochrome (panel keeps its own accent). */
+       *  one; null when its buttons are monochrome (panel keeps its own accent). */
       accent?: string | null;
     }
-  | { kind: 'stream'; active: boolean }
   | { kind: 'error'; error: string; code?: ErrorCode };
 
 // --- Content Script  ->  Side Panel (push, chrome.runtime.sendMessage) -----

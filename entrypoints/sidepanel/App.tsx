@@ -96,14 +96,10 @@ export function App() {
   // tracks the output; one catch-up read shortly after generation ends captures
   // the completed answer. Driven by 'stream-change' pushes from the page.
   const streamActiveRef = useRef(false);
-  // The end-of-stream catch-up lives in a REF, not in the effect body: the
-  // effect re-subscribes on every status flip (each background read toggles
-  // loading→ready), and an effect-local timer would be cancelled mid-wait by
-  // its own cleanup — losing the final catch-up exactly when it matters.
-  const streamFinalRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   useEffect(() => {
     const REFRESH_MS = 70_000;
     let poll: ReturnType<typeof setInterval> | undefined;
+    let final: ReturnType<typeof setTimeout> | undefined;
     const stopPoll = () => {
       if (poll) {
         clearInterval(poll);
@@ -121,17 +117,17 @@ export function App() {
       streamActiveRef.current = !!m.active;
       if (m.active) {
         // A new answer started: cancel any pending end-of-stream catch-up.
-        if (streamFinalRef.current) {
-          clearTimeout(streamFinalRef.current);
-          streamFinalRef.current = undefined;
+        if (final) {
+          clearTimeout(final);
+          final = undefined;
         }
         maybeStart();
       } else {
         stopPoll();
-        if (!streamFinalRef.current && state.status === 'ready') {
+        if (streamActiveRef.current === false && state.status === 'ready' && !final) {
           // Generation ended — give the page a moment to finalize the message,
           // then read once so the finished text lands in the panel.
-          streamFinalRef.current = setTimeout(
+          final = setTimeout(
             () => void actions.loadConversation(true, { background: true }),
             3500,
           );
@@ -140,18 +136,10 @@ export function App() {
       return undefined;
     };
     browser.runtime.onMessage.addListener(onMsg);
-    // Ask the page once whether a generation is ALREADY running: its start push
-    // fired before this panel existed, so without this query a freshly-opened
-    // panel would sit out the rest of an ongoing stream.
-    void sendToActiveTab({ kind: 'get-stream' }).then((res) => {
-      if (res.kind === 'stream') {
-        streamActiveRef.current = res.active;
-        maybeStart();
-      }
-    });
     maybeStart(); // a stream may already be running across a status flip
     return () => {
       stopPoll();
+      if (final) clearTimeout(final);
       browser.runtime.onMessage.removeListener(onMsg);
     };
   }, [actions, state.status]);
