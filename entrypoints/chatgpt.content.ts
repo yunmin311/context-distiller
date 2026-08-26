@@ -341,6 +341,8 @@ async function handle(message: PanelRequest): Promise<PanelResponse> {
       const theme = detectChatgptTheme();
       return { kind: 'theme', theme, accent: detectChatgptAccent(theme) };
     }
+    case 'get-stream':
+      return { kind: 'stream', active: isGenerating() };
     default:
       return { kind: 'error', error: '未知请求', code: 'err.unknownRequest' };
   }

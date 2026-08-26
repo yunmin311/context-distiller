@@ -41,6 +41,16 @@ describe('UI string table', () => {
       );
     }
   });
+
+  it('has no stray braces — every { starts a well-formed placeholder', () => {
+    // A malformed template like '{unclosed' or 'a } b' would print literally.
+    const stray = (s: string) => s.replace(/\{(\w+)\}/g, '').match(/[{}]/);
+    for (const lang of ['zh', 'en'] as const) {
+      for (const [key, value] of Object.entries(STRINGS[lang])) {
+        expect(stray(value), `${lang}.${key} has a malformed brace: ${value}`).toBeNull();
+      }
+    }
+  });
 });
 
 describe('t()', () => {
