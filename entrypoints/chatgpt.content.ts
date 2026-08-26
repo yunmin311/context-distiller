@@ -320,7 +320,7 @@ async function getConversation(): Promise<PanelResponse> {
     // back to the mounted DOM (partial when ChatGPT virtualizes a long thread).
     console.info(
       '[Context Distiller] full read unavailable → partial DOM read. reason:',
-      api ? api.error ?? 'unknown' : 'timed out (no response within 40s)',
+      api ? api.error ?? 'unknown' : 'timed out (no response within 20s)',
     );
     const domRaw = chatgptAdapter.extractFromDom();
     if (domRaw.length > 0) {
