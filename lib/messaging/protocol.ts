@@ -16,6 +16,9 @@ export type PanelRequest =
   | { kind: 'get-selection' }
   | { kind: 'fill-composer'; text: string }
   | { kind: 'get-theme' }
+  /** Is ChatGPT generating right now? Lets a freshly-opened panel join an
+   *  already-running stream (the start push fired before the panel existed). */
+  | { kind: 'get-stream' }
   | {
       kind: 'scroll-to-message';
       messageId: string;
@@ -70,9 +73,10 @@ export type PanelResponse =
       kind: 'theme';
       theme: 'light' | 'dark';
       /** ChatGPT's own accent / primary color, when the page exposes a non-grey
-       *  one; null when its buttons are monochrome (panel keeps its own accent). */
+       *  one; null when its UI is monochrome (panel keeps its own accent). */
       accent?: string | null;
     }
+  | { kind: 'stream'; active: boolean }
   | { kind: 'error'; error: string; code?: ErrorCode };
 
 // --- Content Script  ->  Side Panel (push, chrome.runtime.sendMessage) -----
@@ -103,6 +107,16 @@ export interface ThemePush {
   theme: 'light' | 'dark';
   /** ChatGPT's accent color, or null when its UI is monochrome. */
   accent?: string | null;
+}
+
+/**
+ * Pushed when ChatGPT STARTS or STOPS generating (streaming) an answer, so the
+ * panel can quietly re-read on a slow cadence while output is live and do one
+ * catch-up read after it ends. Fire-and-forget like the other pushes.
+ */
+export interface StreamChangePush {
+  kind: 'stream-change';
+  active: boolean;
 }
 
 // --- Content Script  <->  Main World Bridge (window CustomEvent) ----------
