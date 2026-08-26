@@ -84,6 +84,9 @@ const zh = {
   'err.noContentScript':
     '无法与页面通信。请在 ChatGPT（chatgpt.com）对话页打开侧边栏，必要时刷新页面。',
   'err.noMessages': '未读取到消息。请确认已打开一个对话；超长对话可向上滚动加载后再刷新。',
+  'err.loginExpired': 'ChatGPT 登录态已失效，无法完整读取——请重新登录后刷新页面再试。',
+  'err.contractChanged':
+    'ChatGPT 的接口或页面结构可能已变更，插件读不到内容。请检查插件是否有新版本。',
   'err.fillFailed': '未能写入输入框，请改用“复制完整消息”。',
   'err.unknownRequest': '未知请求',
   'err.scrollNotFound': '这条当前找不到（可能刚被折叠/虚拟化），刷新页面后再试。',
@@ -251,6 +254,10 @@ const en: Record<UIKey, string> = {
     'Cannot talk to the page. Open the side panel on a ChatGPT (chatgpt.com) conversation, and refresh the page if needed.',
   'err.noMessages':
     'No messages found. Make sure a conversation is open; for a very long thread, scroll up to load more and refresh.',
+  'err.loginExpired':
+    "ChatGPT's session has expired, so the full read failed — log in again, refresh the page, and retry.",
+  'err.contractChanged':
+    "ChatGPT's interface may have changed and nothing could be read. Check whether an extension update is available.",
   'err.fillFailed': 'Could not write to the composer — use “Copy the full message” instead.',
   'err.unknownRequest': 'Unknown request',
   'err.scrollNotFound':
