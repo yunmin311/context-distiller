@@ -1,4 +1,4 @@
-import type { ConversationInfo, MessageSource } from '../lib/core/types';
+﻿import type { ConversationInfo, MessageSource } from '../lib/core/types';
 import { normalizeMessages, coerceRole } from '../lib/platform/normalizer';
 import type { RawMessage } from '../lib/platform/adapter';
 import { chatgptAdapter } from '../lib/platform/chatgpt-adapter';
@@ -13,6 +13,7 @@ import {
   type ActiveMessagePush,
   type ThemePush,
   type ConversationGrewPush,
+  type StreamChangePush,
 } from '../lib/messaging/protocol';
 
 /**
@@ -54,8 +55,60 @@ export default defineContentScript({
     setupFollow(ctx);
     setupThemeSync(ctx);
     setupGrowthWatch(ctx);
+    setupStreamWatch(ctx);
   },
 });
+
+/**
+ * Is ChatGPT currently generating (streaming) an answer? Two independent page
+ * signals: the composer swaps its send button for a STOP button while generating,
+ * and the growing answer carries the streaming highlight class. Either alone is
+ * treated as active, so a rename of one can't blind us.
+ */
+function isGenerating(): boolean {
+  return !!document.querySelector('[data-testid="stop-button"], .result-streaming');
+}
+
+/**
+ * Report stream start/stop to the panel, so it can quietly re-read on a slow
+ * cadence while an answer is being generated and do one catch-up read after it
+ * ends. Pushed only on CHANGES (debounced — generation churns the DOM constantly).
+ */
+function setupStreamWatch(ctx: {
+  isInvalid: boolean;
+  onInvalidated: (cb: () => void) => void;
+}): void {
+  let last: boolean | null = null;
+  let timer: number | undefined;
+  const check = () => {
+    timer = undefined;
+    if (ctx.isInvalid) return;
+    const active = isGenerating();
+    if (active === last) return;
+    last = active;
+    const msg: StreamChangePush = { kind: 'stream-change', active };
+    try {
+      void browser.runtime.sendMessage(msg).catch(() => {});
+    } catch {
+      // context gone between the check and the send — ignore
+    }
+  };
+  const observer = new MutationObserver(() => {
+    if (timer) clearTimeout(timer);
+    timer = window.setTimeout(check, 350); // let bursts of DOM churn settle first
+  });
+  observer.observe(document.body, {
+    childList: true,
+    subtree: true,
+    attributes: true,
+    attributeFilter: ['class'],
+  });
+  check();
+  ctx.onInvalidated(() => {
+    observer.disconnect();
+    if (timer) clearTimeout(timer);
+  });
+}
 
 /** Mounted-message count and completeness of the most recent read. */
 let lastReadWasPartial = false;
@@ -285,6 +338,8 @@ async function handle(message: PanelRequest): Promise<PanelResponse> {
       const theme = detectChatgptTheme();
       return { kind: 'theme', theme, accent: detectChatgptAccent(theme) };
     }
+    case 'get-stream':
+      return { kind: 'stream', active: isGenerating() };
     default:
       return { kind: 'error', error: '未知请求', code: 'err.unknownRequest' };
   }
@@ -298,14 +353,19 @@ async function getConversation(): Promise<PanelResponse> {
   let source: MessageSource;
   let partial: boolean;
 
-  // Primary: full thread from ChatGPT's backend, fetched in the MAIN WORLD (page
-  // context — same-origin session auth works there, unlike an isolated-world
-  // fetch, which made long reads silently fall back to a partial DOM read).
-  // Generous timeout: a very long conversation's JSON (fetch + retries + parse +
-  // walk) can take a while, and timing out here is exactly what made long reads
-  // fall back to the partial DOM. 40s covers the full read (with retries) even on
-  // a slow machine or a briefly rate-limited endpoint.
-  const api = await requestMainWorld(40000, 'extract-api');
+  // FAST-FIRST, two stages (the behavior that felt right on huge threads):
+  //   Stage 1 — race the full backend read against a SHORT budget. If the
+  //   endpoint is slow or tarpitting us, show what's mounted RIGHT NOW instead
+  //   of a half-minute spinner.
+  //   Stage 2 — the backend read keeps running in the background (bounded by
+  //   the bridge's own retries); when it lands we push conversation-grew so the
+  //   panel quietly re-reads and upgrades to the FULL thread. No second click.
+  const apiPromise = requestMainWorld(40000, 'extract-api');
+  const api = await Promise.race([
+    apiPromise,
+    new Promise<null>((resolve) => setTimeout(() => resolve(null), 6000)),
+  ]);
+
   if (api?.ok && api.messages && api.messages.length > 0) {
     raw = api.messages.map((m) => ({
       id: m.id,
@@ -316,11 +376,13 @@ async function getConversation(): Promise<PanelResponse> {
     source = 'page-data';
     partial = false; // the whole conversation, not just what's mounted
   } else {
-    // Full read unavailable — record WHY (a null api = it timed out), then fall
-    // back to the mounted DOM (partial when ChatGPT virtualizes a long thread).
+    // Full read not available YET (fast budget elapsed) or failed outright —
+    // record WHY, fall back to the mounted DOM, and let stage 2 finish later.
     console.info(
-      '[Context Distiller] full read unavailable → partial DOM read. reason:',
-      api ? api.error ?? 'unknown' : 'timed out (no response within 20s)',
+      '[Context Distiller] full read unavailable → showing mounted DOM now. reason:',
+      api === null
+        ? `slower than 6s (still trying in the background)`
+        : api.error ?? 'unknown',
     );
     const domRaw = chatgptAdapter.extractFromDom();
     if (domRaw.length > 0) {
@@ -344,8 +406,42 @@ async function getConversation(): Promise<PanelResponse> {
       source = 'page-data';
     }
     partial = true;
+
+    // Stage 2 — report the outcome of the background full read.
+    void apiPromise.then((late) => {
+      console.info(
+        '[Context Distiller][stage2] background read settled:',
+        late === null
+          ? 'null (outer timeout)'
+          : 'ok=' + late.ok + ' msgs=' + (late.messages?.length ?? 0) + ' err=' + (late.error ?? '-'),
+        'sameUrl=', location.href === url,
+      );
+      if (location.href !== url) return; // user moved on to another conversation
+      if (late?.ok && late.messages && late.messages.length > 0) {
+        console.info('[Context Distiller] late FULL read arrived — panel will upgrade itself');
+        try {
+          void browser.runtime
+            .sendMessage({
+              kind: 'conversation-grew',
+              mounted: document.querySelectorAll('[data-message-author-role]').length,
+            })
+            .catch(() => {});
+        } catch {
+          // context gone between check and send — ignore
+        }
+      } else {
+        console.info(
+          '[Context Distiller] background full read failed:',
+          late ? late.error ?? 'unknown' : 'no answer within 40s',
+        );
+      }
+    });
   }
 
+  document.documentElement.setAttribute(
+    'data-cd-lastread',
+    'raw=' + raw.length + ' partial=' + partial + ' source=' + source,
+  );
   console.debug(
     `[Context Distiller] read ${raw.length} messages via ${partial ? 'DOM (partial)' : 'API (full)'}`,
   );
@@ -649,3 +745,6 @@ function readSelection(): SelectionPayload | null {
     sourceOrder,
   };
 }
+
+
+

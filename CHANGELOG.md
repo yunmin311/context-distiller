@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Fast-first two-stage read** — a refresh no longer blocks on a slow backend.
+  Within ~6 seconds the panel shows the turns ChatGPT has mounted right now,
+  while the full backend read continues in the background; when it lands, the
+  panel **upgrades itself to the complete thread automatically** — no second
+  click. This restores the snappy "partial first, full moments later" feel on
+  very long threads even while ChatGPT's endpoint is slow or throttling, and it
+  stops a hanging read from burning a minute of spinner.
+- **Live follow of a generating answer** — while ChatGPT streams, the panel
+  quietly re-reads every ~70 seconds and catches up once after generation ends;
+  a freshly-opened panel asks the page directly and joins an already-running
+  stream.
+- **Refreshes land on the latest message instantly** — the previous read stays
+  mounted while loading (no scroll-container collapse, so the viewport never
+  resets to the oldest message), and every successful read is an atomic jump to
+  the newest turn. No animation, nothing to scroll back from.
+- Lightweight diagnostics: after each read the page's `<html>` carries a
+  `data-cd-lastread` attribute (raw count / partial / source) for support.
+
+### Changed
+- Backend read retries are bounded (2 × 11s, no second token round), so a
+  failing read surfaces in ≤ ~35s instead of stretching past a minute — and
+  stops hammering an endpoint that is already throttling us.
+
 ## [1.2.0] — 2026-08-21
 
 ### Added

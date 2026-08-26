@@ -158,6 +158,7 @@ type Action =
       source: MessageSource;
     }
   | { type: 'load-error'; error: string; code?: UIKey }
+  | { type: 'load-abort' }
   | { type: 'reset' }
   | { type: 'add-fragment'; groupId: string; fragment: Fragment }
   | { type: 'remove-fragment'; groupId: string; fragmentId: string }
@@ -227,6 +228,17 @@ function reducer(state: DistillerState, action: Action): DistillerState {
 
     case 'load-error':
       return { ...state, status: 'error', error: action.error, errorCode: action.code };
+
+    case 'load-abort':
+      // A BACKGROUND read (stream auto-refresh, growth re-read) failed: settle
+      // back to what was on screen instead of getting stuck in 'loading' — the
+      // user never asked for this read, so it must never surface an error screen.
+      return {
+        ...state,
+        status: state.messages.length > 0 ? 'ready' : 'idle',
+        error: undefined,
+        errorCode: undefined,
+      };
 
     case 'reset':
       return {
@@ -606,6 +618,7 @@ export function useDistiller() {
   const loadConversation = useCallback(
     async (
       quiet = false,
+      opts?: { background?: boolean },
     ): Promise<{
       ok: boolean;
       count: number;
@@ -630,6 +643,7 @@ export function useDistiller() {
       const error = failed?.error ?? '读取对话失败。';
       const code = failed?.code ?? 'err.readFailed';
       if (!quiet) dispatch({ type: 'load-error', error, code });
+      else if (opts?.background) dispatch({ type: 'load-abort' });
       return { ok: false, count: 0, partial: false, error, code };
     },
     [],

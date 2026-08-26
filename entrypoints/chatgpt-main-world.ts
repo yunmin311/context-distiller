@@ -153,23 +153,19 @@ export default defineUnlistedScript(() => {
 
     const token = await getAccessToken();
 
-    // The big one — give each try up to 15s (a huge thread's JSON is large), two tries.
+    // The big one — give each try up to 11s (a huge thread's JSON is large), two
+    // tries. Deliberately bounded so the WHOLE read stays inside the panel's
+    // outer budget even when the endpoint is tarpitting us: hanging 15s-per-try
+    // plus a token-refresh second round used to stretch a failing read past a
+    // minute, which read as "refresh takes forever and then shows 5 messages".
     const load = (t: string) =>
       fetchJsonRetry(
         `/backend-api/conversation/${convId}`,
         { headers: { Authorization: `Bearer ${t}` }, credentials: 'include' },
         2,
-        15000,
+        11000,
       );
-    let conv: any;
-    try {
-      conv = await load(token);
-    } catch (err) {
-      // Most likely a cached token that expired — drop it and try once with a fresh one.
-      tokenCache = null;
-      conv = await load(await getAccessToken());
-      void err;
-    }
+    const conv = await load(token);
     const mapping = conv?.mapping;
     if (!mapping || typeof mapping !== 'object') throw new Error('conversation had no mapping');
 
