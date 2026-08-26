@@ -20,6 +20,14 @@ import {
  * falls back to plain DOM extraction.
  */
 export default defineUnlistedScript(() => {
+  // ONE BRIDGE PER PAGE, EVER. A page-world script survives extension reloads,
+  // so after an update + self-heal reinjection a second copy would register a
+  // second request listener — every read then fetched the conversation TWICE,
+  // which reads as rate-limiting on big threads. Late arrivals bail out here.
+  const w = window as unknown as { __cdMwBridge?: boolean };
+  if (w.__cdMwBridge) return;
+  w.__cdMwBridge = true;
+
   function getFiber(node: Element): any {
     const key = Object.keys(node).find(
       (k) => k.startsWith('__reactFiber$') || k.startsWith('__reactInternalInstance$'),

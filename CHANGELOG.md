@@ -33,6 +33,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the newest turn. No animation, nothing to scroll back from.
 - Lightweight diagnostics: after each read the page's `<html>` carries a
   `data-cd-lastread` attribute (raw count / partial / source) for support.
+- **Self-healing after extension updates** — an open ChatGPT tab keeps an
+  ORPHANED old content script that can never answer again (every click dead
+  until the tab was manually refreshed). The panel now detects that error
+  signature, injects a fresh content script, and retries once — updates heal
+  themselves. The injected bridge is idempotent per page, so a heal can never
+  stack a second listener (which used to double every request and read as
+  throttling).
+- **Conversation-switch detection** — picking another chat in ChatGPT's sidebar
+  changes the URL but re-mounts nothing; the panel now watches for it and
+  quietly re-reads (sub-second) so it always shows the conversation actually
+  on screen.
+- **Snappy startup** — the first read of a fresh panel is DOM-only (lands in
+  well under a second) and a background backend read upgrades it; retries on a
+  half-loaded page are DOM-only too, so a slow network no longer makes the
+  start button feel dead for half a minute.
 
 ### Changed
 - Backend read retries are bounded (2 × 11s, no second token round), so a

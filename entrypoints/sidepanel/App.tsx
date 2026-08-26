@@ -195,28 +195,49 @@ export function App() {
   // Read the conversation, then flash a brief status toast instead of keeping a
   // permanent banner. On a silent auto-read (panel just opened) a failure quietly
   // returns to the intro rather than throwing up an error screen.
+  //
+  // STARTUP SPEED: the FIRST read of a fresh panel runs DOM-ONLY — it lands in
+  // well under a second with whatever ChatGPT has mounted, and a background
+  // backend read then upgrades it to the full thread. Retries (slow page) also
+  // go DOM-only: waiting out the 4s backend budget on every attempt was what
+  // made the start button feel dead.
+  const loadingRef = useRef(false);
   const handleLoad = useCallback(
-    async (silent = false) => {
-      // A read can land before the page's content script is listening, or while a
-      // heavy conversation is still rendering. Keep RETRYING QUIETLY (the panel
-      // stays in its loading state) with a growing backoff — up to ~30s — instead
-      // of declaring failure the instant a busy page hasn't answered yet. Only
-      // the final attempt is allowed to surface an error. Slow networks need
-      // this patience: erroring early just bounces the user into a retry loop.
-      const BACKOFF = [400, 700, 1200, 1800, 2500, 3500, 4000, 5000, 6500, 8000];
-      let res = await actions.loadConversation(true);
-      for (let attempt = 0; !res.ok && attempt < BACKOFF.length; attempt += 1) {
-        await new Promise<void>((r) => setTimeout(r, BACKOFF[attempt]));
-        const last = attempt === BACKOFF.length - 1;
-        res = await actions.loadConversation(!last);
-      }
-      if (res.ok) {
-        setToast({
-          text: t(res.partial ? 'toast.readPartial' : 'toast.read', { count: res.count }),
-          tone: 'ok',
-        });
-      } else if (silent) {
-        actions.reset();
+    async (silent = false, opts?: { domOnlyFirst?: boolean }) => {
+      if (loadingRef.current) return; // one read pipeline at a time
+      loadingRef.current = true;
+      try {
+        const domFirst = !!opts?.domOnlyFirst;
+        let res = await actions.loadConversation(true, domFirst ? { domOnly: true } : undefined);
+        // Slow page: retry QUIETLY with a growing backoff — up to ~30s. Early
+        // retries are DOM-only (instant once the page has anything mounted);
+        // only the final attempt may surface an error.
+        const BACKOFF = [400, 700, 1200, 1800, 2500, 3500, 4000, 5000, 6500, 8000];
+        for (let attempt = 0; !res.ok && attempt < BACKOFF.length; attempt += 1) {
+          await new Promise<void>((r) => setTimeout(r, BACKOFF[attempt]));
+          const last = attempt === BACKOFF.length - 1;
+          res = await actions.loadConversation(!last, {
+            background: !last,
+            domOnly: !last,
+          });
+        }
+        if (res.ok) {
+          if (!silent) {
+            setToast({
+              text: t(res.partial ? 'toast.readPartial' : 'toast.read', { count: res.count }),
+              tone: 'ok',
+            });
+          }
+          // DOM-first start: kick the full backend read right away (silently —
+          // it upgrades the list when it lands, or aborts back if throttled).
+          if (domFirst && res.partial) {
+            void actions.loadConversation(true, { background: true });
+          }
+        } else if (silent) {
+          actions.reset();
+        }
+      } finally {
+        loadingRef.current = false;
       }
     },
     [actions, t],
@@ -309,12 +330,43 @@ export function App() {
     if (state.status !== 'idle') return; // a remembered session was restored
     let cancelled = false;
     void activeTabIsSupported().then((ok) => {
-      if (ok && !cancelled) void handleLoad(true);
+      if (ok && !cancelled) void handleLoad(true, { domOnlyFirst: true });
     });
     return () => {
       cancelled = true;
     };
   }, [state.hydrated, state.status, handleLoad]);
+
+  // Detect CONVERSATION SWITCHES in the tab (user picks another chat in
+  // ChatGPT's sidebar): the URL changes but nothing re-mounts, so the panel
+  // used to keep showing the old thread until a manual refresh — or appear
+  // stalled. Watch the active tab's URL and quietly re-read on change.
+  useEffect(() => {
+    let alive = true;
+    const convId = (u: string) => u.match(/\/c\/([\w-]+)/)?.[1] ?? null;
+    const onUpdated = (tabId: number, info: { url?: string }) => {
+      if (!alive || !info.url) return;
+      const newId = convId(info.url);
+      if (!newId) return;
+      const currentId = conversationUrlRef.current ? convId(conversationUrlRef.current) : null;
+      if (newId === currentId) return;
+      const reRead = () => void handleLoad(true, { domOnlyFirst: true });
+      reRead();
+      // If a read pipeline was already in flight and swallowed that call, try
+      // once more once it had time to finish.
+      window.setTimeout(() => {
+        if (alive && conversationUrlRef.current && convId(conversationUrlRef.current) !== newId) {
+          reRead();
+        }
+      }, 2500);
+    };
+    void browser.tabs.onUpdated.addListener(onUpdated);
+    return () => {
+      alive = false;
+      void browser.tabs.onUpdated.removeListener(onUpdated);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [handleLoad, state.conversation?.url]);
 
   // Every successful read lands the list on its LATEST message, INSTANTLY (no
   // smooth glide): a refresh exists to fetch new turns, so the newest one is
