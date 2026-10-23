@@ -100,10 +100,10 @@ const zh = {
   'toast.deepDone': '深度加载完成：共 {count} 条',
   'err.fillFailed': '未能写入输入框，请改用“复制完整消息”。',
   'err.unknownRequest': '未知请求',
-  'err.scrollNotFound': '这条当前找不到（可能刚被折叠/虚拟化），刷新页面后再试。',
+  'err.scrollNotFound': '这条暂时没找到（对话太长或刚被虚拟化），已回到原位置；稍后再点一次通常能到。',
+  'err.scrollWhileGenerating': '正在生成回答，视图会一直钉在底部；等输出结束后再定位。',
   'err.scrollGeneric': '未能跳转。',
   'err.scrollNoPage': '未能跳转，请确认 ChatGPT 对话页在前台。',
-
   // --- message list -------------------------------------------------------
   'role.user': '你',
   'role.assistant': 'AI',
@@ -280,7 +280,9 @@ const en: Record<UIKey, string> = {
   'err.fillFailed': 'Could not write to the composer — use “Copy the full message” instead.',
   'err.unknownRequest': 'Unknown request',
   'err.scrollNotFound':
-    "Can't find that message right now (it may have just been virtualized). Refresh the page and try again.",
+    "Couldn't reach that one for now (long thread, or just virtualized) — you've been put back where you were; trying again in a moment usually lands.",
+  'err.scrollWhileGenerating':
+    'Still generating — the view stays pinned to the bottom. Locate the message after the answer finishes.',
   'err.scrollGeneric': 'Could not jump to it.',
   'err.scrollNoPage': 'Could not jump — make sure the ChatGPT conversation tab is in front.',
 

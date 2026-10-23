@@ -514,6 +514,16 @@ async function deepWalkStep(toTop: boolean): Promise<PanelResponse> {
  * mounts. If it still can't be found, we say so instead of guessing.
  */
 async function scrollToMessage(messageId: string, orderedIds?: string[]): Promise<PanelResponse> {
+  // While ChatGPT is generating it pins the view to the bottom — a seek fights
+  // that and always loses, and used to surface as a mysterious「找不到」. Say so.
+  if (isGenerating()) {
+    return {
+      kind: 'scroll-result',
+      ok: false,
+      error: '正在生成回答，视图会一直钉在底部；等输出结束后再定位。',
+      code: 'err.scrollWhileGenerating',
+    };
+  }
   const sel = messageByIdSelector(messageId);
   // Mute the follow push for the whole operation (extended by each seek step).
   beginProgrammaticScroll(2000);
@@ -523,19 +533,24 @@ async function scrollToMessage(messageId: string, orderedIds?: string[]): Promis
     // settled yet (heights still being measured), which is why it used to take a
     // few clicks. Run the seek, and if it comes up empty, run it once more — the
     // first pass leaves the list warmed up and measured, so the retry lands.
+    // A FAILED hunt used to strand the user wherever it ran out of budget —
+    // remember where they were and put them back instead.
+    const savedTop = findScrollContainer().scrollTop;
     el = await seekToMessage(messageId, orderedIds);
     if (!el) {
       await new Promise<void>((r) => setTimeout(r, 200));
       el = await seekToMessage(messageId, orderedIds);
     }
-  }
-  if (!el) {
-    return {
-      kind: 'scroll-result',
-      ok: false,
-      error: '这条当前找不到（可能刚被折叠/虚拟化），刷新页面后再试。',
-      code: 'err.scrollNotFound',
-    };
+    if (!el) {
+      findScrollContainer().scrollTo({ top: savedTop, behavior: 'auto' });
+      beginProgrammaticScroll(1500);
+      return {
+        kind: 'scroll-result',
+        ok: false,
+        error: '这条暂时没找到（对话太长或刚被虚拟化），已回到原位置；稍后再点一次通常能到。',
+        code: 'err.scrollNotFound',
+      };
+    }
   }
   beginProgrammaticScroll(1400);
   el.scrollIntoView({ block: 'center', behavior: 'smooth' });
@@ -724,8 +739,18 @@ async function seekToMessage(messageId: string, orderedIds: string[]): Promise<H
   // hunt oscillate — the virtualizer changes scrollHeight underfoot, so a computed
   // position is stale by the time it applies. Stepping can't overshoot by more than
   // one screen, which is why this lands on the first click instead of the third.
+  //
+  // PROGRESS-AWARE BUDGET (v1.4): a fixed 40-step budget gave up on far targets —
+  // the virtualizer feeds rows at its own pace, and when it lags a step or two the
+  // old walk burned its budget standing still and failed with「找不到」. Now the
+  // budget only burns while the mounted band STANDS STILL: movement toward the
+  // target resets the stall counter, a stalled step waits longer (giving the
+  // virtualizer time to mount instead of being stepped past), and only ~6
+  // consecutive stalls give up.
   const step = Math.max(200, container.clientHeight * 0.8);
-  for (let attempt = 0; attempt < 40; attempt += 1) {
+  let bandKey = '';
+  let stalled = 0;
+  for (let attempt = 0; attempt < 64; attempt += 1) {
     const mounted = mountedOrders();
     let dir = 0;
     if (mounted.length === 0) {
@@ -742,6 +767,14 @@ async function seekToMessage(messageId: string, orderedIds: string[]): Promise<H
       dir = 1;
     }
 
+    const key = `${dir}:${mounted.length ? Math.min(...mounted) : '*'}-${mounted.length ? Math.max(...mounted) : '*'}`;
+    if (key === bandKey) stalled += 1;
+    else {
+      stalled = 0;
+      bandKey = key;
+    }
+    if (stalled >= 6) break; // the page stopped feeding rows — give up cleanly
+
     const extent = maxTop();
     const next = Math.max(0, Math.min(extent, top + dir * step));
     if (next === top) break; // pinned at an end and still nothing — give up cleanly
@@ -749,7 +782,7 @@ async function seekToMessage(messageId: string, orderedIds: string[]): Promise<H
 
     beginProgrammaticScroll(1200); // keep the follow push muted for the whole hunt
     container.scrollTo({ top, behavior: 'auto' });
-    await wait(210);
+    await wait(stalled >= 2 ? 420 : 190);
 
     const hit = document.querySelector<HTMLElement>(sel);
     if (hit) return hit;

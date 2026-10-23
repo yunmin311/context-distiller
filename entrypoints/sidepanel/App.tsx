@@ -670,6 +670,10 @@ export function App() {
   return (
     <LangProvider lang={lang}>
     <div className="app">
+      {/* ANY read in flight — foreground, background, or the periodic poll — shows
+          this thin bar. Background reads are silent by design in every other way,
+          but "something is happening" must always be visible at a glance. */}
+      {state.status === 'loading' && <div className="loadbar" aria-hidden />}
       <header className="topbar">
         <span className="brand-mark">
           <Logo />

@@ -53,7 +53,8 @@ export type ErrorCode =
   | 'err.noMessages'
   | 'err.fillFailed'
   | 'err.unknownRequest'
-  | 'err.scrollNotFound';
+  | 'err.scrollNotFound'
+  | 'err.scrollWhileGenerating';
 
 export type PanelResponse =
   | { kind: 'pong'; platform: string }
