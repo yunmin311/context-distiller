@@ -523,8 +523,14 @@ async function deepWalkStep(toTop: boolean): Promise<PanelResponse> {
  */
 async function scrollToMessage(messageId: string, orderedIds?: string[]): Promise<PanelResponse> {
   // While ChatGPT is generating it pins the view to the bottom — a seek fights
-  // that and always loses, and used to surface as a mysterious「找不到」. Say so.
-  if (isGenerating()) {
+  // that and always loses, and used to surface as a mysterious「找不到」.
+  // Deliberately keyed on the VISIBLE STOP BUTTON only: the streaming class can
+  // linger on rows long after a run, and a false refusal here reads as "locate
+  // is permanently broken" — the exact bug this guard once caused.
+  const stop = document.querySelector<HTMLElement>(STOP_BUTTON_SELECTOR);
+  const stopVisible =
+    !!stop && (stop.offsetParent !== null || stop.getClientRects().length > 0);
+  if (stopVisible) {
     return {
       kind: 'scroll-result',
       ok: false,

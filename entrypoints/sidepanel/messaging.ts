@@ -17,6 +17,15 @@ export async function activeTabIsSupported(): Promise<boolean> {
 }
 
 /**
+ * Hard ceiling for one request round-trip. The content script's own budgets
+ * (4s API race, 40s main-world ceiling) all settle well inside this; the race
+ * exists because a tab closed / context invalidated MID-request makes
+ * sendMessage promise NEVER settle — and an unsettled read used to hold the
+ * read gate + pipeline forever ("后台一直在加载但界面不出现，之后什么都点不动").
+ */
+const SEND_TIMEOUT_MS = 45_000;
+
+/**
  * Send a typed request to the content script in the active tab. Never throws —
  * connectivity problems (wrong page, content script not injected yet) come back
  * as a `{ kind: 'error' }` response so the UI can show a friendly message.
@@ -29,6 +38,23 @@ export async function activeTabIsSupported(): Promise<boolean> {
  * and retry ONCE, so an update heals itself instead of breaking silently.
  */
 export async function sendToActiveTab(request: PanelRequest): Promise<PanelResponse> {
+  return Promise.race([
+    sendWithHeal(request),
+    new Promise<PanelResponse>((resolve) =>
+      setTimeout(
+        () =>
+          resolve({
+            kind: 'error',
+            error: '页面长时间没有响应。',
+            code: 'err.noResponse' as const,
+          }),
+        SEND_TIMEOUT_MS,
+      ),
+    ),
+  ]);
+}
+
+async function sendWithHeal(request: PanelRequest): Promise<PanelResponse> {
   // TEST SEAM (offline E2E rig only): a localStorage counter forces the exact
   // "orphaned content script" failure signature for the next N sends, so the
   // self-heal path is exercisable deterministically in a real browser.

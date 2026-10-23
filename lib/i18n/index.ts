@@ -44,6 +44,9 @@ const zh = {
     '在 ChatGPT 对话页读取消息，挑出真正有用的整条或片段，分组、点预设按钮，生成一段纯文本，复制或填回输入框。不调用模型、不保存、不自动发送。',
   'intro.read': '读取当前对话',
   'intro.scope': '仅在 chatgpt.com / chat.openai.com 生效。',
+  'link.ok': '与页面的连接：正常。',
+  'link.dead': '与页面的连接：无响应 —— 页面脚本未注入或已失效，请刷新 ChatGPT 页面后重试。',
+  'link.nopage': '当前活动标签页不是 ChatGPT 对话页 —— 请切到对话页再操作。',
   'import.open': '手动粘贴导入',
   'import.title': '粘贴导入',
   'import.body':
@@ -222,6 +225,11 @@ const en: Record<UIKey, string> = {
     'Read the messages of an open ChatGPT conversation, pick the turns or highlights that actually matter, group them, click the preset buttons, and get one plain-text message to copy or drop back into the composer. No model call, nothing stored, never auto-sent.',
   'intro.read': 'Read this conversation',
   'intro.scope': 'Works only on chatgpt.com / chat.openai.com.',
+  'link.ok': 'Link to the page: alive.',
+  'link.dead':
+    'Link to the page: no answer — the page script is missing or stale. Refresh the ChatGPT page and retry.',
+  'link.nopage':
+    'The active tab is not a ChatGPT conversation — switch to the conversation tab first.',
   'import.open': 'Paste text instead',
   'import.title': 'Paste import',
   'import.body':

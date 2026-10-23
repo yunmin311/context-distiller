@@ -83,6 +83,9 @@ export interface DistillerState {
   error?: string;
   /** i18n key for the failure, when the failure is one we word ourselves. */
   errorCode?: UIKey;
+  /** Reads in flight RIGHT NOW (any kind). Drives the load bar; unlike `status`
+   *  it counts BACKGROUND reads too, without strobing the foreground spinner. */
+  busyReads: number;
   conversation?: ConversationInfo;
   messages: ConversationMessage[];
   partial: boolean;
@@ -136,6 +139,7 @@ function initialState(): DistillerState {
   const lang = resolveLang('auto', browserUILanguage());
   return {
     status: 'idle',
+    busyReads: 0,
     messages: [],
     partial: false,
     groups: createDefaultGroups(lang),
@@ -151,7 +155,7 @@ function initialState(): DistillerState {
 }
 
 type Action =
-  | { type: 'load-start' }
+  | { type: 'load-start'; background?: boolean }
   | {
       type: 'load-success';
       conversation: ConversationInfo;
@@ -197,7 +201,20 @@ function mapGroup(
 function reducer(state: DistillerState, action: Action): DistillerState {
   switch (action.type) {
     case 'load-start':
-      return { ...state, status: 'loading', error: undefined, errorCode: undefined };
+      // BACKGROUND reads must not strobe the foreground spinner: when a list is
+      // already on screen, a poll/upgrade read only bumps busyReads (the load
+      // bar's counter) and leaves status — and therefore the whole rendered
+      // list — untouched.
+      if (action.background && state.status === 'ready') {
+        return { ...state, busyReads: state.busyReads + 1 };
+      }
+      return {
+        ...state,
+        status: 'loading',
+        error: undefined,
+        errorCode: undefined,
+        busyReads: state.busyReads + 1,
+      };
 
     case 'load-success': {
       // Switching to a DIFFERENT conversation must not carry the previous one's
@@ -218,7 +235,13 @@ function reducer(state: DistillerState, action: Action): DistillerState {
         state.source === action.source &&
         sameMessages(state.messages, action.messages)
       ) {
-        return { ...state, status: 'ready', error: undefined, errorCode: undefined };
+        return {
+          ...state,
+          status: 'ready',
+          error: undefined,
+          errorCode: undefined,
+          busyReads: Math.max(0, state.busyReads - 1),
+        };
       }
       // Keep only marks whose message is still in the freshly read conversation —
       // a same-conversation refresh keeps its marks; switching conversations drops
@@ -233,6 +256,7 @@ function reducer(state: DistillerState, action: Action): DistillerState {
         status: 'ready',
         error: undefined,
         errorCode: undefined,
+        busyReads: Math.max(0, state.busyReads - 1),
         conversation: action.conversation,
         messages: action.messages,
         partial: action.partial,
@@ -244,7 +268,13 @@ function reducer(state: DistillerState, action: Action): DistillerState {
     }
 
     case 'load-error':
-      return { ...state, status: 'error', error: action.error, errorCode: action.code };
+      return {
+        ...state,
+        status: 'error',
+        error: action.error,
+        errorCode: action.code,
+        busyReads: Math.max(0, state.busyReads - 1),
+      };
 
     case 'load-abort':
       // A BACKGROUND read (stream auto-refresh, growth re-read) failed: settle
@@ -255,6 +285,7 @@ function reducer(state: DistillerState, action: Action): DistillerState {
         status: state.messages.length > 0 ? 'ready' : 'idle',
         error: undefined,
         errorCode: undefined,
+        busyReads: Math.max(0, state.busyReads - 1),
       };
 
     case 'merge-messages': {
@@ -273,7 +304,11 @@ function reducer(state: DistillerState, action: Action): DistillerState {
       // and re-runs the viewport effects. ChatGPT's progressive hydration fires
       // growth pushes in bursts; without this guard the panel strobes.
       if (sameMessages(state.messages, merged)) {
-        return state.status === 'ready' ? state : { ...state, status: 'ready' };
+        return {
+          ...state,
+          status: 'ready',
+          busyReads: Math.max(0, state.busyReads - 1),
+        };
       }
       // Back to 'ready': the merge IS the completion of this background read.
       // Leaving 'loading' here kept the spinner alive forever AND gated the
@@ -281,6 +316,7 @@ function reducer(state: DistillerState, action: Action): DistillerState {
       return {
         ...state,
         status: 'ready',
+        busyReads: Math.max(0, state.busyReads - 1),
         messages: merged,
       };
     }
@@ -308,6 +344,7 @@ function reducer(state: DistillerState, action: Action): DistillerState {
         status: 'idle',
         error: undefined,
         errorCode: undefined,
+        busyReads: 0,
         conversation: undefined,
         messages: [],
         partial: false,
@@ -497,6 +534,7 @@ function reducer(state: DistillerState, action: Action): DistillerState {
           // 便签 is long-term config, not part of the session snapshot — always
           // restore it from prefs regardless of the remembered working set.
           scratchpad: prefs.scratchpad ?? '',
+          busyReads: 0,
           conversation: snapshot.conversation,
           messages: snapshot.messages,
           partial: snapshot.partial,
@@ -700,7 +738,7 @@ export function useDistiller() {
         return { ok: false, count: 0, partial: false, skipped: true };
       }
       try {
-        dispatch({ type: 'load-start' });
+        dispatch({ type: 'load-start', background: opts?.background === true });
         const res = await sendToActiveTab({ kind: 'get-conversation', domOnly: opts?.domOnly === true });
         if (res.kind === 'conversation' && res.ok) {
           if (opts?.merge && res.partial) {

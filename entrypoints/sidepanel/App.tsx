@@ -1,6 +1,7 @@
 ﻿import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { compile } from '../../lib/core/compiler';
 import type { ConversationMessage } from '../../lib/core/types';
+import type { PanelResponse } from '../../lib/messaging/protocol';
 import { isUIKey, t as translate, type UIKey } from '../../lib/i18n';
 import { LangProvider } from './i18n';
 import { useDistiller, type SelectionInput } from './useDistiller';
@@ -60,19 +61,26 @@ export function App() {
   const [scratchpadOpen, setScratchpadOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [toast, setToast] = useState<Toast | null>(null);
+  // Liveness of the link to the ChatGPT tab, surfaced in the UI so "reads work
+  // but locate/follow don't" (or the reverse) is diagnosable WITHOUT devtools:
+  // 'ok' = the content script answers; 'dead' = no live script in the page;
+  // 'nopage' = the active tab isn't a ChatGPT conversation at all.
+  const [link, setLink] = useState<'unknown' | 'ok' | 'dead' | 'nopage'>('unknown');
   // The load bar stays on for a grace period AFTER a read settles: reads fire in
   // bursts (hydration growth, poll + upgrade), and a bar that blinks on/off per
   // read reads as the panel twitching. A steady line says "working"; a clean end
-  // says "done".
+  // says "done". Driven by busyReads (ANY read) — not by status, which only
+  // foreground reads may move (background polls must not strobe the spinner).
   const [loadBarOn, setLoadBarOn] = useState(false);
+  const busy = state.busyReads > 0;
   useEffect(() => {
-    if (state.status === 'loading') {
+    if (busy) {
       setLoadBarOn(true);
       return;
     }
     const t = setTimeout(() => setLoadBarOn(false), 700);
     return () => clearTimeout(t);
-  }, [state.status]);
+  }, [busy]);
 
   useEffect(() => {
     if (!state.groups.some((g) => g.id === activeGroupId)) {
@@ -85,6 +93,28 @@ export function App() {
     const timer = setTimeout(() => setToast(null), 2800);
     return () => clearTimeout(timer);
   }, [toast]);
+
+  // Probe the page link with the cheap ping (self-heal included): re-checked
+  // whenever a read settles, so a failed read ALWAYS arrives with a verdict on
+  // whether the page side is even alive.
+  useEffect(() => {
+    let alive = true;
+    void (async () => {
+      const res = await Promise.race([
+        sendToActiveTab({ kind: 'ping' }),
+        new Promise<PanelResponse>((r) =>
+          setTimeout(() => r({ kind: 'error', error: 'timeout', code: 'err.noResponse' }), 6000),
+        ),
+      ]);
+      if (!alive) return;
+      if (res.kind === 'pong') setLink('ok');
+      else if (res.kind === 'error' && res.code === 'err.noActiveTab') setLink('nopage');
+      else setLink('dead');
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [state.status]);
 
   // A partial (DOM) read only sees what ChatGPT has mounted. The content script
   // pushes 'conversation-grew' with a REASON, and each reason gets the cheapest
@@ -765,6 +795,8 @@ export function App() {
               </button>
             </div>
             <p className="hint tiny">{t('intro.scope')}</p>
+            {link === 'dead' && <p className="hint tiny">{t('link.dead')}</p>}
+            {link === 'nopage' && <p className="hint tiny">{t('link.nopage')}</p>}
           </div>
         )}
 
@@ -782,6 +814,9 @@ export function App() {
             <p className="muted tiny">
               {state.errorCode && isUIKey(state.errorCode) ? t(state.errorCode) : state.error}
             </p>
+            {link !== 'unknown' && link !== 'ok' && (
+              <p className="hint tiny">{t(link === 'nopage' ? 'link.nopage' : 'link.dead')}</p>
+            )}
             <button className="btn btn-outline btn-sm" onClick={() => handleRetry()}>
               {t('status.retry')}
             </button>
