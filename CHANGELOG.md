@@ -5,6 +5,44 @@ All notable changes to Context Distiller are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.0] — 2026-10-23
+
+读取策略整顿：这一版的主目标是**让插件不再和 ChatGPT 网页打架**——所有自动读取现在共享一个
+节流闸门（单飞行 + 20 秒最小间隔 + 内容无变化即跳过），与页面本身抢限流预算的路径被逐一堵住。
+
+### Added
+- **手动粘贴导入（兜底路径）** — 读取不可用时（如 ChatGPT 改版、接口失效），顶栏「导入」或
+  首屏「手动粘贴导入」可把任意文本作为消息加入列表：默认整段一条并可选角色；检测到
+  「你：/AI：/User:/Assistant:」等前缀（中英、全半角冒号）时可一键**按前缀拆分**成多条。
+  导入的消息参与既有全流程（标记 / 问答配对 / 划词 / 编译 / 快照），行内编号不可定位（没有对应网页消息）。
+  `lib/utils/paste-split.ts` 为纯函数并有单测锁定。
+- **读取闸门（read gate）** — 所有后端读取经过单一闸门：同一时刻最多一次全量请求；自动触发
+  （轮询 / 追读 / 升级读）之间强制 ≥20 秒间隔；用户显式动作（刷新 / 三连击收尾 / 重试）跳过间隔但
+  仍不并发。`lib/utils/read-governor.ts` 纯逻辑 + 单测。
+- **结果去重** — 内容完全相同的读取（典型的空闲轮询）在 reducer 里原样跳过：列表不重渲染、
+  视口不动、spinner 不闪。
+- **CI** — 恢复 GitHub Actions：push / PR 自动跑 typecheck + 单测 + 构建。
+- **选择器集中化** — 所有 ChatGPT 选择器 / 端点 / 正则集中到 `lib/platform/chatgpt-markers.ts`，
+  三个消费文件全部改为引用；外部兼容性探针的 `--sync` 会自动跟随这张表。
+
+### Changed
+- **生成中轮询 70s → 120s**，且每次轮询过闸门、无变化不落状态。生成结束后仍保留一次 3.5s 追读。
+- **grew 推送按原因分流**：滚动增长（`grown`）现在做 **DOM 合并读取（零后端请求）**——v1.3 在这里
+  发全量后端读取，是与网页抢预算的最大漏洞；迟到全量读落地（`full-ready`）才触发一次受闸门的
+  全量读取。慢打开场景下 wasted 的第二次全量请求不复存在。
+- **吸底不再任性** — 只有用户显式动作（手动刷新 / 重试 / 三连击 / 切换会话 / 首次打开）或用户本来就
+  在底部时，读取后才会落到最新消息；后台轮询与升级读保持视口原地不动。
+- **「重试」不再重载你的标签页** — v1.3 的重试会替用户刷新 ChatGPT 页并轮询 30 次；现在改为原地
+  静默重试 3 次（前两次 DOM-only），页面问题仍由错误界面说明、由用户自己决定何时刷新。
+
+### Fixed
+- 慢打开时同一次启动浪费两次全量后端请求（首次 4 秒超时的结果被丢弃后立即重发）的问题，随
+  `full-ready` 分流消除。
+
+### Removed
+- `reloadActiveTab` / 自动刷新页面重试路径及其 i18n 文案（`toast.reloaded*`、`err.focusChatgptTab`、
+  `err.reloadNoMessages`）。
+
 ## [1.3.0] — 2026-08-26
 
 ### Added

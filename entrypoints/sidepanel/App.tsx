@@ -10,6 +10,7 @@ import { GroupBoard } from './components/GroupBoard';
 import { PresetBar } from './components/PresetBar';
 import { PreviewPanel } from './components/PreviewPanel';
 import { Scratchpad } from './components/Scratchpad';
+import { ImportDialog } from './components/ImportDialog';
 
 interface Toast {
   text: string;
@@ -57,6 +58,7 @@ export function App() {
   const [activeGroupId, setActiveGroupId] = useState(() => state.groups[0]?.id ?? '');
   const [previewOpen, setPreviewOpen] = useState(false);
   const [scratchpadOpen, setScratchpadOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [toast, setToast] = useState<Toast | null>(null);
 
   useEffect(() => {
@@ -71,17 +73,27 @@ export function App() {
     return () => clearTimeout(timer);
   }, [toast]);
 
-  // A partial (DOM) read only sees what ChatGPT has mounted. When the user scrolls
-  // up and the page loads older turns, the content script says so and we quietly
-  // re-read, so the list grows on its own instead of needing a manual refresh.
-  // Background reads settle back to 'ready' on failure instead of erroring.
-  // The viewport ANCHORS to the row the user is reading — growth must never
+  // A partial (DOM) read only sees what ChatGPT has mounted. The content script
+  // pushes 'conversation-grew' with a REASON, and each reason gets the cheapest
+  // correct response (v1.4 read policy):
+  //   - 'grown'     → the user scrolled and more turns mounted. A DOM-only MERGE
+  //                   read adds them with ZERO backend pressure — the old full
+  //                   backend read here was the main rate-limit budget leak.
+  //   - 'full-ready'→ the slow full backend read started earlier finally landed;
+  //                   ONE gated full read upgrades the panel to the whole thread
+  //                   (instead of the old implicit second full fetch).
+  // Background reads settle back to 'ready' on failure instead of erroring, and
+  // the viewport ANCHORS to the row the user is reading — growth must never
   // yank them to the bottom.
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | undefined;
     const onMsg = (msg: unknown): undefined => {
-      const m = msg as { kind?: string } | undefined;
+      const m = msg as { kind?: string; reason?: string } | undefined;
       if (m?.kind !== 'conversation-grew') return undefined;
+      const reason = m.reason === 'full-ready' ? 'full-ready' : 'grown';
+      // 'grown' only matters while our list is still a partial read; after a
+      // full read there is nothing for a DOM merge to add.
+      if (reason === 'grown' && !latestRef.current.partial) return undefined;
       if (timer) clearTimeout(timer);
       // Remember WHERE the user is so the post-read snap can restore it: the
       // topmost visible message row when there is one, otherwise their exact
@@ -111,7 +123,16 @@ export function App() {
       } catch {
         // anchoring is best-effort — default snap applies otherwise
       }
-      timer = setTimeout(() => void actions.loadConversation(true, { background: true }), 400);
+      timer = setTimeout(
+        () => {
+          if (reason === 'grown') {
+            void actions.loadConversation(true, { background: true, merge: true, domOnly: true });
+          } else {
+            void actions.loadConversation(true, { background: true, merge: true });
+          }
+        },
+        400,
+      );
       return undefined;
     };
     browser.runtime.onMessage.addListener(onMsg);
@@ -122,9 +143,16 @@ export function App() {
   }, [actions]);
 
   // Live follow of a generating answer: while ChatGPT is streaming, quietly
-  // re-read every ~70s (within the requested 1–1.5min cadence) so the list
-  // tracks the output; one catch-up read shortly after generation ends captures
-  // the completed answer. Driven by 'stream-change' pushes from the page.
+  // re-read every 120s so the list tracks the output; one catch-up read shortly
+  // after generation ends captures the completed answer. Driven by
+  // 'stream-change' pushes from the page.
+  //
+  // CADENCE (v1.4): raised from 70s to 120s, AND every poll goes through the
+  // read gate (single-flight + 20s minimum gap). The poll shares the user's
+  // ChatGPT rate-limit budget with the page itself — a 70s full fetch plus the
+  // growth/upgrade paths was exactly the "reads fight the web page" feeling.
+  // Unchanged polls are also dropped in the reducer (identical content → no
+  // state churn), so a quiet thread costs nothing but the interval tick.
   const streamActiveRef = useRef(false);
   // The end-of-stream catch-up lives in a REF, not in the effect body: the
   // effect re-subscribes on every status flip (each background read toggles
@@ -132,7 +160,7 @@ export function App() {
   // its own cleanup — losing the final catch-up exactly when it matters.
   const streamFinalRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   useEffect(() => {
-    const REFRESH_MS = 70_000;
+    const REFRESH_MS = 120_000;
     let poll: ReturnType<typeof setInterval> | undefined;
     const stopPoll = () => {
       if (poll) {
@@ -238,7 +266,15 @@ export function App() {
       loadingRef.current = true;
       try {
         const domFirst = !!opts?.domOnlyFirst;
-        let res = await actions.loadConversation(true, domFirst ? { domOnly: true } : undefined);
+        if (!domFirst) {
+          // User-invoked read: skip the gate's gap window (their click IS the
+          // authorization) — the gate still prevents overlap.
+          forceSnapRef.current = true;
+        }
+        let res = await actions.loadConversation(
+          true,
+          domFirst ? { domOnly: true } : { force: true },
+        );
         // Slow page: retry QUIETLY with a growing backoff — up to ~30s. Early
         // retries are DOM-only (instant once the page has anything mounted);
         // only the final attempt may surface an error.
@@ -249,6 +285,7 @@ export function App() {
           res = await actions.loadConversation(!last, {
             background: !last,
             domOnly: !last,
+            force: last, // the pipeline is user-visible — the gate must not fail it silently
           });
         }
         if (res.ok) {
@@ -273,13 +310,14 @@ export function App() {
     [actions, t],
   );
 
-  // "重试" reloads the page for the user and reads again, so they don't have to
-  // refresh by hand.
+  // "重试" reads again in place — it NEVER reloads the user's tab anymore
+  // (v1.3 did, and could wipe whatever they were mid-doing in it).
   const handleRetry = useCallback(async () => {
-    const res = await actions.retryWithReload();
+    forceSnapRef.current = true; // an explicit retry lands on the latest
+    const res = await actions.retryRead();
     if (res.ok) {
       setToast({
-        text: t(res.partial ? 'toast.reloadedPartial' : 'toast.reloaded', { count: res.count }),
+        text: t(res.partial ? 'toast.readPartial' : 'toast.read', { count: res.count }),
         tone: 'ok',
       });
     }
@@ -296,6 +334,7 @@ export function App() {
     if (deepLoadingRef.current) return;
     deepLoadingRef.current = true;
     const startUrl = conversationUrlRef.current;
+    forceSnapRef.current = true; // the user asked for the whole thread — land on it
     setToast({ text: t('toast.deepStart'), tone: 'ok' });
     try {
       // Jump the page to its oldest message first.
@@ -325,7 +364,8 @@ export function App() {
       // Walk done: ONE normal (backend) read to finish — if the endpoint has
       // recovered it replaces the merged list with the authoritative full thread;
       // if it is still throttled the merged walk result stays on screen.
-      await actions.loadConversation(true, { background: true, merge: true });
+      forceSnapRef.current = true;
+      await actions.loadConversation(true, { background: true, merge: true, force: true });
       setToast({
         text: t('toast.deepDone', { count: latestRef.current.messages.length }),
         tone: 'ok',
@@ -380,7 +420,10 @@ export function App() {
       if (!newId) return;
       const currentId = conversationUrlRef.current ? convId(conversationUrlRef.current) : null;
       if (newId === currentId) return;
-      const reRead = () => void handleLoad(true, { domOnlyFirst: true });
+      const reRead = () => {
+        forceSnapRef.current = true; // a switched-in conversation lands on its latest
+        void handleLoad(true, { domOnlyFirst: true });
+      };
       reRead();
       // If a read pipeline was already in flight and swallowed that call, try
       // once more once it had time to finish.
@@ -398,17 +441,28 @@ export function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [handleLoad, state.conversation?.url]);
 
-  // Every successful read lands the list on its LATEST message, INSTANTLY (no
-  // smooth glide) — EXCEPT when a read was triggered by scroll-up growth: there
-  // the user is reading OLD turns, and yanking them to the bottom is hostile.
-  // For that case the viewport is ANCHORED to the row they were reading, or —
-  // when no message row was visible (they were in the workspace/presets area) —
-  // their exact scroll offset is preserved through the re-read.
-  // Callers declare intent in snapIntentRef; the effect consumes it.
+  // Viewport policy (v1.4) — the panel must never yank itself while the user
+  // reads. Growth re-reads declare an anchor / preserve intent (set in
+  // snapIntentRef above): the viewport is ANCHORED to the row they were
+  // reading, or their exact scroll offset is preserved. The bottom snap fires
+  // only when the user ASKED for the read (manual refresh / retry / deep-load
+  // finish / conversation switch set forceSnapRef) or when they were already
+  // reading at the bottom; background polls and upgrades keep the viewport.
   const mainRef = useRef<HTMLElement | null>(null);
   const snapIntentRef = useRef<
     'bottom' | { anchor: string } | { preserve: { top: number; sh: number } }
   >('bottom');
+  const atBottomRef = useRef(true);
+  const forceSnapRef = useRef(true); // the very first read lands on the latest
+  useEffect(() => {
+    const el = mainRef.current;
+    if (!el) return;
+    const onScroll = () => {
+      atBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+    };
+    el.addEventListener('scroll', onScroll, { passive: true });
+    return () => el.removeEventListener('scroll', onScroll);
+  }, []);
   useEffect(() => {
     if (state.status !== 'ready' || state.messages.length === 0) return;
     const el = mainRef.current;
@@ -428,7 +482,10 @@ export function App() {
       el.scrollTop = intent.preserve.top + (el.scrollHeight - intent.preserve.sh);
       return;
     }
-    el.scrollTop = el.scrollHeight;
+    if (forceSnapRef.current || atBottomRef.current) {
+      forceSnapRef.current = false;
+      el.scrollTop = el.scrollHeight;
+    }
   }, [state.status, state.messages]);
 
   // Marked messages (读时标记) still present in the read conversation, compiled
@@ -498,12 +555,14 @@ export function App() {
     activeGroupTitle: activeGroup?.title,
     addedIds,
     messages: state.messages,
+    partial: state.partial,
   });
   latestRef.current = {
     activeGroupId,
     activeGroupTitle: activeGroup?.title,
     addedIds,
     messages: state.messages,
+    partial: state.partial,
   };
 
   const handleAddMessage = useCallback(
@@ -631,6 +690,15 @@ export function App() {
           {t('top.scratchpad')}
           {state.scratchpad.trim() !== '' && <span className="scratch-dot" aria-hidden />}
         </button>
+        <button
+          type="button"
+          className={`scratch-toggle${importOpen ? ' scratch-toggle-on' : ''}`}
+          title={t('top.importTip')}
+          aria-expanded={importOpen}
+          onClick={() => setImportOpen((v) => !v)}
+        >
+          {t('top.import')}
+        </button>
         {state.status === 'ready' && (
           <span className="muted tiny topbar-count">{state.messages.length}</span>
         )}
@@ -659,9 +727,14 @@ export function App() {
           <div className="intro">
             <h1>{t('intro.title')}</h1>
             <p className="muted">{t('intro.body')}</p>
-            <button className="btn btn-primary" onClick={() => handleLoad()}>
-              {t('intro.read')}
-            </button>
+            <div className="intro-actions">
+              <button className="btn btn-primary" onClick={() => handleLoad()}>
+                {t('intro.read')}
+              </button>
+              <button className="btn btn-outline" onClick={() => setImportOpen(true)}>
+                {t('import.open')}
+              </button>
+            </div>
             <p className="hint tiny">{t('intro.scope')}</p>
           </div>
         )}
@@ -798,6 +871,18 @@ export function App() {
         onClose={() => setPreviewOpen(false)}
         onCopy={handleCopy}
         onFill={handleFill}
+      />
+
+      <ImportDialog
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        onImport={(turns) => {
+          const count = actions.addPastedMessages(turns);
+          if (count > 0) {
+            setImportOpen(false);
+            setToast({ text: t('toast.imported', { count }), tone: 'ok' });
+          }
+        }}
       />
 
       {toast && <div className={`toast toast-${toast.tone}`}>{toast.text}</div>}

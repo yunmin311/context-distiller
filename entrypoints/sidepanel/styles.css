@@ -1308,3 +1308,45 @@ textarea:focus,
     animation-duration: 0.001ms !important;
   }
 }
+
+/* --- paste import ------------------------------------------------------ */
+
+/* Two side-by-side actions on the intro screen (read / paste-import). */
+.intro-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.import-text {
+  min-height: 180px;
+}
+
+.import-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 8px 0 2px;
+  flex-wrap: wrap;
+}
+
+.import-role {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--ink-2);
+  cursor: pointer;
+}
+
+.import-role input {
+  accent-color: var(--accent);
+  margin: 0;
+}
+
+/* Paste-imported rows: the number is inert (no page counterpart to locate). */
+.msg-num-static {
+  cursor: default;
+  opacity: 0.55;
+}

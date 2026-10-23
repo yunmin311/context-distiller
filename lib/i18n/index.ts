@@ -34,6 +34,9 @@ const zh = {
   'top.refreshAria': '读取或刷新当前对话',
   'top.langTip': '切换界面与提示词语言（中文 / English）',
   'top.langAria': '切换语言',
+  'top.import': '导入',
+  'top.importTip':
+    '手动粘贴导入：把文本作为消息加入列表（读取不可用时的兜底；只进侧边栏，不发任何请求）',
 
   // --- intro / status -----------------------------------------------------
   'intro.title': '选材料，编译成一段可交给 AI 的纯文本',
@@ -41,9 +44,19 @@ const zh = {
     '在 ChatGPT 对话页读取消息，挑出真正有用的整条或片段，分组、点预设按钮，生成一段纯文本，复制或填回输入框。不调用模型、不保存、不自动发送。',
   'intro.read': '读取当前对话',
   'intro.scope': '仅在 chatgpt.com / chat.openai.com 生效。',
+  'import.open': '手动粘贴导入',
+  'import.title': '粘贴导入',
+  'import.body':
+    '粘贴的文本会作为消息加入列表，可多次粘贴累加；只存在侧边栏内存里（「记住本次」打开时随快照存本地），绝不外发。',
+  'import.placeholder': '粘贴一段对话或材料…',
+  'import.role': '这条的角色',
+  'import.add': '加入',
+  'import.split': '按前缀拆分',
+  'import.splitTip': '检测到「你：/AI：」等前缀，自动拆成多条',
+  'import.detected': '检测到 {count} 个前缀',
   'status.loading': '正在读取当前对话…',
   'status.errorTitle': '读取失败',
-  'status.retry': '刷新页面重试',
+  'status.retry': '重试',
 
   // --- section headers ----------------------------------------------------
   'section.messages': '对话消息',
@@ -63,8 +76,7 @@ const zh = {
   // --- toasts -------------------------------------------------------------
   'toast.read': '已读取 {count} 条消息',
   'toast.readPartial': '已读取 {count} 条 · 超长对话可向上滚动加载后再刷新',
-  'toast.reloaded': '已刷新并读取 {count} 条消息',
-  'toast.reloadedPartial': '已刷新并读取 {count} 条 · 超长对话可向上滚动加载后再刷新',
+  'toast.imported': '已导入 {count} 条消息',
   'toast.added': '已加入到「{group}」',
   'toast.addedPair': '已加入问答到「{group}」',
   'toast.addedSelection': '已加入选中到「{group}」',
@@ -91,8 +103,6 @@ const zh = {
   'err.scrollNotFound': '这条当前找不到（可能刚被折叠/虚拟化），刷新页面后再试。',
   'err.scrollGeneric': '未能跳转。',
   'err.scrollNoPage': '未能跳转，请确认 ChatGPT 对话页在前台。',
-  'err.focusChatgptTab': '请先切换到并聚焦 ChatGPT 对话标签页（chatgpt.com），再点重试。',
-  'err.reloadNoMessages': '刷新后仍未读取到消息，请确认页面已打开一个对话后再重试。',
 
   // --- message list -------------------------------------------------------
   'role.user': '你',
@@ -100,6 +110,7 @@ const zh = {
   'role.system': '系统',
   'msg.locate': '点编号：在左侧对话里定位这条（只滚动页面，不影响账号）',
   'msg.locateAria': '在对话里定位这条',
+  'msg.pastedNoLocate': '粘贴导入的消息，没有对应的网页消息可定位',
   'msg.mark': '标记这条（会进【标记】段，一起编译）',
   'msg.markAria': '标记这条',
   'msg.unmark': '取消标记',
@@ -201,6 +212,9 @@ const en: Record<UIKey, string> = {
   'top.refreshAria': 'Read or refresh this conversation',
   'top.langTip': 'Switch interface and prompt language (中文 / English)',
   'top.langAria': 'Switch language',
+  'top.import': 'Import',
+  'top.importTip':
+    'Paste import: add text as messages (the fallback when reading is unavailable; stays in the panel, never sent anywhere)',
 
   // --- intro / status -----------------------------------------------------
   'intro.title': 'Pick the material, compile one plain-text prompt',
@@ -208,9 +222,19 @@ const en: Record<UIKey, string> = {
     'Read the messages of an open ChatGPT conversation, pick the turns or highlights that actually matter, group them, click the preset buttons, and get one plain-text message to copy or drop back into the composer. No model call, nothing stored, never auto-sent.',
   'intro.read': 'Read this conversation',
   'intro.scope': 'Works only on chatgpt.com / chat.openai.com.',
+  'import.open': 'Paste text instead',
+  'import.title': 'Paste import',
+  'import.body':
+    'Pasted text becomes message rows; paste again to add more. It lives in the panel’s memory only (saved locally with the snapshot when Remember is on) and is never sent anywhere.',
+  'import.placeholder': 'Paste a conversation or some material…',
+  'import.role': 'Role of this entry',
+  'import.add': 'Add',
+  'import.split': 'Split by prefixes',
+  'import.splitTip': 'Prefixed lines like “User: / AI:” detected — split into separate turns',
+  'import.detected': '{count} prefixed lines detected',
   'status.loading': 'Reading this conversation…',
   'status.errorTitle': "Couldn't read the conversation",
-  'status.retry': 'Reload the page and retry',
+  'status.retry': 'Retry',
 
   // --- section headers ----------------------------------------------------
   'section.messages': 'Messages',
@@ -230,9 +254,7 @@ const en: Record<UIKey, string> = {
   // --- toasts -------------------------------------------------------------
   'toast.read': 'Read {count} messages',
   'toast.readPartial': 'Read {count} · scroll up in ChatGPT to load more, then refresh',
-  'toast.reloaded': 'Reloaded and read {count} messages',
-  'toast.reloadedPartial':
-    'Reloaded and read {count} · scroll up in ChatGPT to load more, then refresh',
+  'toast.imported': 'Imported {count} messages',
   'toast.added': 'Added to “{group}”',
   'toast.addedPair': 'Added the Q&A pair to “{group}”',
   'toast.addedSelection': 'Added the highlight to “{group}”',
@@ -261,9 +283,6 @@ const en: Record<UIKey, string> = {
     "Can't find that message right now (it may have just been virtualized). Refresh the page and try again.",
   'err.scrollGeneric': 'Could not jump to it.',
   'err.scrollNoPage': 'Could not jump — make sure the ChatGPT conversation tab is in front.',
-  'err.focusChatgptTab': 'Switch to and focus the ChatGPT tab (chatgpt.com) first, then retry.',
-  'err.reloadNoMessages':
-    'Still no messages after the reload — make sure a conversation is open, then retry.',
 
   // --- message list -------------------------------------------------------
   'role.user': 'You',
@@ -271,6 +290,7 @@ const en: Record<UIKey, string> = {
   'role.system': 'System',
   'msg.locate': 'Click the number to locate this message in ChatGPT (scroll only — nothing sent)',
   'msg.locateAria': 'Locate this message in the conversation',
+  'msg.pastedNoLocate': 'Imported by paste — no matching page message to locate',
   'msg.mark': 'Mark this message (compiles into the [Marks] section)',
   'msg.markAria': 'Mark this message',
   'msg.unmark': 'Remove mark',

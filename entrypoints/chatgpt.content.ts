@@ -3,6 +3,15 @@ import { normalizeMessages, coerceRole } from '../lib/platform/normalizer';
 import type { RawMessage } from '../lib/platform/adapter';
 import { chatgptAdapter } from '../lib/platform/chatgpt-adapter';
 import {
+  AUTHOR_ROLE_ATTR,
+  GENERATING_SELECTOR,
+  MESSAGE_ID_ATTR,
+  MESSAGE_SELECTOR,
+  SEND_BUTTON_SELECTOR,
+  THEME_ACCENT_VARS,
+  messageByIdSelector,
+} from '../lib/platform/chatgpt-markers';
+import {
   MW_REQUEST_EVENT,
   MW_RESPONSE_EVENT,
   type PanelRequest,
@@ -66,7 +75,7 @@ export default defineContentScript({
  * treated as active, so a rename of one can't blind us.
  */
 function isGenerating(): boolean {
-  return !!document.querySelector('[data-testid="stop-button"], .result-streaming');
+  return !!document.querySelector(GENERATING_SELECTOR);
 }
 
 /**
@@ -127,10 +136,10 @@ function setupGrowthWatch(ctx: {
   let timer: number | undefined;
   const check = () => {
     if (ctx.isInvalid || !lastReadWasPartial) return;
-    const mounted = document.querySelectorAll('[data-message-author-role]').length;
+    const mounted = document.querySelectorAll(MESSAGE_SELECTOR).length;
     if (mounted <= lastReadMounted) return;
     lastReadMounted = mounted;
-    const msg: ConversationGrewPush = { kind: 'conversation-grew', mounted };
+    const msg: ConversationGrewPush = { kind: 'conversation-grew', mounted, reason: 'grown' };
     try {
       void browser.runtime.sendMessage(msg).catch(() => {});
     } catch {
@@ -245,7 +254,7 @@ function isProgrammaticScroll(): boolean {
  * has scrolled to / is reading at the top of the viewport.
  */
 function topVisibleMessageId(): string | null {
-  const nodes = Array.from(document.querySelectorAll<HTMLElement>('[data-message-author-role]'));
+  const nodes = Array.from(document.querySelectorAll<HTMLElement>(MESSAGE_SELECTOR));
   const LINE = 140; // a little below the very top of the viewport
   let best: HTMLElement | null = null;
   let bestTop = -Infinity;
@@ -265,7 +274,7 @@ function topVisibleMessageId(): string | null {
       }
     }
   }
-  return best ? best.getAttribute('data-message-id') : null;
+  return best ? best.getAttribute(MESSAGE_ID_ATTR) : null;
 }
 
 /** Inject the main-world bridge; swallow failures so DOM extraction still works. */
@@ -420,8 +429,9 @@ async function getConversation(message: PanelRequest & { kind: 'get-conversation
             void browser.runtime
               .sendMessage({
                 kind: 'conversation-grew',
-                mounted: document.querySelectorAll('[data-message-author-role]').length,
-              })
+                mounted: document.querySelectorAll(MESSAGE_SELECTOR).length,
+                reason: 'full-ready',
+              } satisfies ConversationGrewPush)
               .catch(() => {});
           } catch {
             // context gone between check and send — ignore
@@ -447,7 +457,7 @@ async function getConversation(message: PanelRequest & { kind: 'get-conversation
   // Remember what this read saw, so the growth watcher only speaks up when a
   // partial read could actually be improved by re-reading.
   lastReadWasPartial = partial;
-  lastReadMounted = document.querySelectorAll('[data-message-author-role]').length;
+  lastReadMounted = document.querySelectorAll(MESSAGE_SELECTOR).length;
 
   const messages = normalizeMessages(raw);
   if (messages.length === 0) {
@@ -504,7 +514,7 @@ async function deepWalkStep(toTop: boolean): Promise<PanelResponse> {
  * mounts. If it still can't be found, we say so instead of guessing.
  */
 async function scrollToMessage(messageId: string, orderedIds?: string[]): Promise<PanelResponse> {
-  const sel = `[data-message-id="${CSS.escape(messageId)}"]`;
+  const sel = messageByIdSelector(messageId);
   // Mute the follow push for the whole operation (extended by each seek step).
   beginProgrammaticScroll(2000);
   let el = document.querySelector<HTMLElement>(sel);
@@ -609,15 +619,7 @@ function isUsableAccent(rgb: [number, number, number], theme: 'light' | 'dark'):
  */
 function detectChatgptAccent(theme: 'light' | 'dark'): string | null {
   const rootStyle = getComputedStyle(document.documentElement);
-  const VARS = [
-    '--interactive-bg-accent-default',
-    '--interactive-label-accent-default',
-    '--accent-primary',
-    '--brand-purple',
-    '--link',
-    '--text-accent',
-  ];
-  for (const name of VARS) {
+  for (const name of THEME_ACCENT_VARS) {
     const raw = rootStyle.getPropertyValue(name).trim();
     if (!raw) continue;
     const rgb = parseRgb(raw);
@@ -625,7 +627,7 @@ function detectChatgptAccent(theme: 'light' | 'dark'): string | null {
   }
   // Fall back to the send button / a prominent link.
   const candidates = [
-    document.querySelector<HTMLElement>('[data-testid="send-button"]'),
+    document.querySelector<HTMLElement>(SEND_BUTTON_SELECTOR),
     document.querySelector<HTMLElement>('button[aria-label*="Send" i]'),
   ];
   for (const el of candidates) {
@@ -672,7 +674,7 @@ function flashElement(el: HTMLElement): void {
 
 /** The scrollable ancestor that holds the conversation (best effort). */
 function findScrollContainer(): HTMLElement {
-  const anyMsg = document.querySelector<HTMLElement>('[data-message-author-role]');
+  const anyMsg = document.querySelector<HTMLElement>(MESSAGE_SELECTOR);
   let el: HTMLElement | null = anyMsg?.parentElement ?? null;
   // Pick the ancestor with the LARGEST scrollable range — the real conversation
   // scroller, not the first nested element that merely allows overflow.
@@ -701,13 +703,13 @@ async function seekToMessage(messageId: string, orderedIds: string[]): Promise<H
   if (targetOrder < 0) return null;
   const container = findScrollContainer();
   const orderOf = new Map(orderedIds.map((id, i) => [id, i] as const));
-  const sel = `[data-message-id="${CSS.escape(messageId)}"]`;
+  const sel = messageByIdSelector(messageId);
   const wait = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
   const maxTop = () => Math.max(1, container.scrollHeight - container.clientHeight);
 
   const mountedOrders = (): number[] =>
-    Array.from(document.querySelectorAll<HTMLElement>('[data-message-id]'))
-      .map((node) => orderOf.get(node.getAttribute('data-message-id') || ''))
+    Array.from(document.querySelectorAll<HTMLElement>(`[${MESSAGE_ID_ATTR}]`))
+      .map((node) => orderOf.get(node.getAttribute(MESSAGE_ID_ATTR) || ''))
       .filter((o): o is number => typeof o === 'number');
 
   // One proportional jump to get in the neighbourhood…
@@ -762,15 +764,15 @@ function readSelection(): SelectionPayload | null {
 
   const anchor = selection.anchorNode;
   const startEl = anchor instanceof Element ? anchor : anchor?.parentElement ?? null;
-  const messageEl = startEl?.closest<HTMLElement>('[data-message-author-role]') ?? null;
+  const messageEl = startEl?.closest<HTMLElement>(MESSAGE_SELECTOR) ?? null;
 
   const role =
-    coerceRole(messageEl?.getAttribute('data-message-author-role') ?? 'assistant') ?? 'assistant';
-  const messageId = messageEl?.getAttribute('data-message-id') ?? undefined;
+    coerceRole(messageEl?.getAttribute(AUTHOR_ROLE_ATTR) ?? 'assistant') ?? 'assistant';
+  const messageId = messageEl?.getAttribute(MESSAGE_ID_ATTR) ?? undefined;
 
   let sourceOrder = 0;
   if (messageEl) {
-    const all = Array.from(document.querySelectorAll('[data-message-author-role]'));
+    const all = Array.from(document.querySelectorAll(MESSAGE_SELECTOR));
     sourceOrder = Math.max(0, all.indexOf(messageEl));
   }
 

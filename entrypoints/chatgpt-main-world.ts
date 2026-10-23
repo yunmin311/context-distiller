@@ -5,6 +5,14 @@ import {
   type MwResponse,
   type MwRawMessage,
 } from '../lib/messaging/protocol';
+import {
+  AUTHOR_ROLE_ATTR,
+  CONVERSATION_ID_RE,
+  FIBER_KEY_PREFIXES,
+  MESSAGE_SELECTOR,
+  SESSION_ENDPOINT,
+  conversationEndpoint,
+} from '../lib/platform/chatgpt-markers';
 
 /**
  * Main World Capture Bridge.
@@ -29,8 +37,8 @@ export default defineUnlistedScript(() => {
   w.__cdMwBridge = true;
 
   function getFiber(node: Element): any {
-    const key = Object.keys(node).find(
-      (k) => k.startsWith('__reactFiber$') || k.startsWith('__reactInternalInstance$'),
+    const key = Object.keys(node).find((k) =>
+      FIBER_KEY_PREFIXES.some((p) => k.startsWith(p)),
     );
     return key ? (node as any)[key] : null;
   }
@@ -70,7 +78,7 @@ export default defineUnlistedScript(() => {
   }
 
   function extract(): MwRawMessage[] {
-    const nodes = document.querySelectorAll('[data-message-author-role]');
+    const nodes = document.querySelectorAll(MESSAGE_SELECTOR);
     const messages: MwRawMessage[] = [];
     const seen = new Set<string>();
 
@@ -85,7 +93,7 @@ export default defineUnlistedScript(() => {
         if (id && seen.has(id)) return;
         if (id) seen.add(id);
 
-        const role = message.author?.role ?? node.getAttribute('data-message-author-role') ?? '';
+        const role = message.author?.role ?? node.getAttribute(AUTHOR_ROLE_ATTR) ?? '';
         const text = partsToText(message.content);
         if (text) messages.push({ id, role, text });
       } catch {
@@ -138,7 +146,7 @@ export default defineUnlistedScript(() => {
 
   async function getAccessToken(): Promise<string> {
     if (tokenCache && Date.now() < tokenCache.until) return tokenCache.value;
-    const session = await fetchJsonRetry('/api/auth/session', { credentials: 'include' }, 2, 7000);
+    const session = await fetchJsonRetry(SESSION_ENDPOINT, { credentials: 'include' }, 2, 7000);
     const token: string | undefined = session?.accessToken;
     if (!token) throw new Error('session returned no accessToken (are you logged in?)');
     tokenCache = { value: token, until: Date.now() + 4 * 60 * 1000 };
@@ -156,7 +164,7 @@ export default defineUnlistedScript(() => {
    * so the content script can log WHY it fell back to the partial DOM read.
    */
   async function extractViaApi(): Promise<MwRawMessage[]> {
-    const convId = location.pathname.match(/\/c\/([\w-]+)/)?.[1];
+    const convId = location.pathname.match(CONVERSATION_ID_RE)?.[1];
     if (!convId) throw new Error('no conversation id in URL (not on a /c/ page)');
 
     const token = await getAccessToken();
@@ -168,7 +176,7 @@ export default defineUnlistedScript(() => {
     // minute, which read as "refresh takes forever and then shows 5 messages".
     const load = (t: string) =>
       fetchJsonRetry(
-        `/backend-api/conversation/${convId}`,
+        conversationEndpoint(convId),
         { headers: { Authorization: `Bearer ${t}` }, credentials: 'include' },
         2,
         11000,

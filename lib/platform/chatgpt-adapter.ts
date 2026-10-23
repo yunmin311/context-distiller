@@ -1,16 +1,24 @@
 import type { PlatformAdapter, RawMessage } from './adapter';
 import { registerAdapter } from './adapter';
+import {
+  AUTHOR_ROLE_ATTR,
+  CHATGPT_ORIGIN_RE,
+  COMPOSER_SELECTOR,
+  MESSAGE_ID_ATTR,
+  MESSAGE_SELECTOR,
+  SEND_BUTTON_SELECTOR,
+  TITLE_NAV_SELECTOR,
+  TITLE_SUFFIX_RE,
+  messageByIdSelector,
+} from './chatgpt-markers';
 
 /**
  * ChatGPT platform adapter (chatgpt.com / chat.openai.com).
  *
- * All ChatGPT-specific DOM knowledge is confined to this file. If ChatGPT
- * changes its markup, this is the only place that needs updating.
+ * All ChatGPT-specific DOM knowledge is confined to this file + the shared
+ * marker table (`chatgpt-markers.ts`). If ChatGPT changes its markup, the
+ * marker table is the place to update.
  */
-
-const MESSAGE_SELECTOR = '[data-message-author-role]';
-const COMPOSER_SELECTOR =
-  '#prompt-textarea, textarea[data-testid="prompt-textarea"], div[contenteditable="true"]#prompt-textarea';
 
 /** Read the visible text of one message node, preferring the content container. */
 function readMessageText(node: HTMLElement): string {
@@ -37,25 +45,23 @@ export const chatgptAdapter: PlatformAdapter = {
   mainWorldScript: '/chatgpt-main-world.js',
 
   matchesUrl(url: string): boolean {
-    return /^https?:\/\/(chatgpt\.com|chat\.openai\.com)\//.test(url);
+    return CHATGPT_ORIGIN_RE.test(url);
   },
 
   getConversationTitle(): string {
     // Active conversation title in the sidebar, else the document title.
-    const active = document.querySelector<HTMLElement>(
-      'nav a[aria-current="page"], nav li[data-active] a',
-    );
+    const active = document.querySelector<HTMLElement>(TITLE_NAV_SELECTOR);
     const fromNav = active?.innerText?.trim();
     if (fromNav) return fromNav;
-    return document.title.replace(/\s*[-|]\s*ChatGPT\s*$/i, '').trim() || 'ChatGPT 对话';
+    return document.title.replace(TITLE_SUFFIX_RE, '').trim() || 'ChatGPT 对话';
   },
 
   extractFromDom(): RawMessage[] {
     const nodes = document.querySelectorAll<HTMLElement>(MESSAGE_SELECTOR);
     const out: RawMessage[] = [];
     nodes.forEach((node) => {
-      const role = node.getAttribute('data-message-author-role') ?? '';
-      const id = node.getAttribute('data-message-id') ?? undefined;
+      const role = node.getAttribute(AUTHOR_ROLE_ATTR) ?? '';
+      const id = node.getAttribute(MESSAGE_ID_ATTR) ?? undefined;
       const text = readMessageText(node);
       if (text) out.push({ id, role, text, source: 'dom' });
     });
@@ -109,7 +115,7 @@ export const chatgptAdapter: PlatformAdapter = {
   },
 
   locateMessageElement(messageId: string): HTMLElement | null {
-    return document.querySelector<HTMLElement>(`[data-message-id="${CSS.escape(messageId)}"]`);
+    return document.querySelector<HTMLElement>(messageByIdSelector(messageId));
   },
 };
 

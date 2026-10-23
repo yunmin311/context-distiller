@@ -89,6 +89,9 @@ const MessageRow = memo(function MessageRow({
   const t = useT();
   const isLong = readable.length > CLAMP_CHARS;
   const shown = isLong && !open ? readable.slice(0, CLAMP_CHARS).trimEnd() + '…' : readable;
+  // Paste-imported rows have no page counterpart to scroll to — their number
+  // is inert (the crosshair/locate affordance only exists for read messages).
+  const isPasted = message.id.startsWith('paste_');
 
   // Local draft for the mark note so typing doesn't dispatch on every keystroke
   // (commit on blur / Enter). Resync if the note changes from outside (restore).
@@ -109,14 +112,20 @@ const MessageRow = memo(function MessageRow({
     >
       <header className="msg-head">
         <span className={`tag tag-${message.role}`}>{roleLabel(message.role, t)}</span>
-        <button
-          className="msg-num"
-          title={t('msg.locate')}
-          aria-label={t('msg.locateAria')}
-          onClick={() => onLocate(message.id)}
-        >
-          #{message.order + 1}
-        </button>
+        {isPasted ? (
+          <span className="msg-num msg-num-static" title={t('msg.pastedNoLocate')}>
+            #{message.order + 1}
+          </span>
+        ) : (
+          <button
+            className="msg-num"
+            title={t('msg.locate')}
+            aria-label={t('msg.locateAria')}
+            onClick={() => onLocate(message.id)}
+          >
+            #{message.order + 1}
+          </button>
+        )}
         <div className="spacer" />
         <button
           className={`mark-btn${marked ? ' mark-btn-on' : ''}`}

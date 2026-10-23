@@ -53,9 +53,7 @@ export type ErrorCode =
   | 'err.noMessages'
   | 'err.fillFailed'
   | 'err.unknownRequest'
-  | 'err.scrollNotFound'
-  | 'err.focusChatgptTab'
-  | 'err.reloadNoMessages';
+  | 'err.scrollNotFound';
 
 export type PanelResponse =
   | { kind: 'pong'; platform: string }
@@ -101,10 +99,18 @@ export interface ActiveMessagePush {
  * Pushed when a PARTIAL (DOM-based) read is on screen and scrolling up has
  * loaded more of the thread into the page, so the panel can quietly re-read and
  * grow its list. Never sent after a full backend read — there is nothing to add.
+ *
+ * `reason` tells the panel WHICH re-read is appropriate:
+ *   - 'grown'     → the user scrolled and more turns mounted; a DOM-only merge
+ *                   read suffices (zero backend pressure).
+ *   - 'full-ready'→ the slow full backend read started earlier finally landed;
+ *                   one gated full re-read upgrades the panel to the complete
+ *                   thread.
  */
 export interface ConversationGrewPush {
   kind: 'conversation-grew';
   mounted: number;
+  reason: 'grown' | 'full-ready';
 }
 
 /** Pushed when ChatGPT's theme (light/dark or accent) changes, so the panel follows. */

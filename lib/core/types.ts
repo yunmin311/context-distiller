@@ -9,8 +9,12 @@
 
 export type MessageRole = 'user' | 'assistant' | 'system';
 
-/** Where a message's text came from — the page's internal data, or the DOM. */
-export type MessageSource = 'page-data' | 'dom';
+/**
+ * Where a message's text came from — the page's internal data, the DOM, or the
+ * user's own paste (the manual-import floor that works even when reading is
+ * broken).
+ */
+export type MessageSource = 'page-data' | 'dom' | 'pasted';
 
 /** High-level info about the conversation currently open on the page. */
 export interface ConversationInfo {

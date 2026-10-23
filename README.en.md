@@ -53,7 +53,7 @@ By design it is deliberately **quiet and blends into ChatGPT**: neutral colors, 
 
 | Does | Does not |
 | --- | --- |
-| Read the current ChatGPT conversation and normalize it | Call an AI / model API |
+| Read the current ChatGPT conversation and normalize it; **paste it in manually** when reading is unavailable | Call an AI / model API |
 | Multi-granularity selection (whole message / Q&A / highlight) | Save history projects or a long-term fragment library |
 | Group, reorder and annotate material in a temporary board | Generate PDF / Word / Markdown files |
 | Preset Prompts → compile plain text in a fixed order | Auto-send messages |
@@ -63,7 +63,8 @@ By design it is deliberately **quiet and blends into ChatGPT**: neutral colors, 
 
 ## Core features
 
-- **Full conversation reading**: a page-world bridge fetches the **entire** thread from ChatGPT's **own backend API** (same-origin, your existing session, nothing uploaded), so even very long threads read in full at once — beating ChatGPT's virtualization (only a screenful is in the DOM). It follows the active branch and skips the model's reasoning and "thinking-preview" preambles, so each turn is a clean question + answer; the mounted-DOM read is the fallback. **Opening the side panel auto-reads the conversation — no manual "read" click.** The side panel strips Markdown markers on display (`##`, `**`, `>`, …) for clean reading; the original text handed to the AI is preserved.
+- **Full conversation reading**: a page-world bridge fetches the **entire** thread from ChatGPT's **own backend API** (same-origin, your existing session, nothing uploaded), so even very long threads read in full at once — beating ChatGPT's virtualization (only a screenful is in the DOM). It follows the active branch and skips the model's reasoning and "thinking-preview" preambles, so each turn is a clean question + answer; the mounted-DOM read is the fallback. **Opening the side panel auto-reads the conversation — no manual "read" click.** The side panel strips Markdown markers on display (`##`, `**`, `>`, …) for clean reading; the original text handed to the AI is preserved. Every automatic read (including the 120 s low-frequency poll while an answer streams, and the end-of-stream catch-up) goes through one **read gate**: at most one request in flight, a 20 s minimum gap, and identical results are dropped — **the extension never competes with the page itself for the rate-limit budget**.
+- **Manual paste import (the floor)**: when reading is unavailable, paste text in as messages — one turn with a picked role, or split at "User: / AI:" prefixes when they are detected — and it flows through the exact same selection and compilation pipeline.
 - **Multi-granularity selection**: a whole message, a Q&A pair, or **highlight text inside a message** to extract that exact fragment (with an optional note written right at selection time).
 - **Message marks 📌**: while reading, pin the turns that matter and jot a note; a `📌 N` chip toggles a marked-only filter. Marks **compile into their own 【标记】 section**, after the grouped material.
 - **Locate in the conversation**: click a message's **#number** (or a fragment's crosshair) and the ChatGPT page **scrolls to that message and flashes it**. A pure local scroll — no request, nothing done to your account; a message ChatGPT has virtualized away is **sought out** until it loads.
@@ -152,7 +153,7 @@ context-distiller/
 pnpm test
 ```
 
-Unit tests cover the deterministic core: the Prompt compiler (determinism, fixed order, extras in library order, empty material, special-character passthrough, unknown presets skipped, and the same guarantees again in English), the normalizer (role detection, whitespace, dedup), and the i18n tables — the Chinese and English tables must have identical keys and identical placeholders, no English string may contain leftover Chinese, and every built-in preset and prompt-library entry must carry an English twin, so a forgotten translation fails the build instead of shipping. The parts that depend on the real ChatGPT DOM are verified manually / with Playwright in the browser; the checklist is in [docs/USAGE.md](docs/USAGE.md).
+Unit tests cover the deterministic core: the Prompt compiler (determinism, fixed order, extras in library order, empty material, special-character passthrough, unknown presets skipped, and the same guarantees again in English), the normalizer (role detection, whitespace, dedup), the **read gate** (single-flight, minimum gap, signature dedup) and the **paste splitter** (CN/EN prefixes, continuation lines, empty-turn cleanup), and the i18n tables — the Chinese and English tables must have identical keys and identical placeholders, no English string may contain leftover Chinese, and every built-in preset and prompt-library entry must carry an English twin, so a forgotten translation fails the build instead of shipping. CI runs typecheck + tests + build on every push / PR. The parts that depend on the real ChatGPT DOM are verified manually / with Playwright in the browser; the checklist is in [docs/USAGE.md](docs/USAGE.md).
 
 ## Privacy
 
@@ -163,6 +164,7 @@ Least privilege, least retention. It runs only on chatgpt.com / chat.openai.com,
 - **MVP** ✅ ChatGPT reading, multi-granularity selection, temporary grouping, preset compilation, copy & fill
 - **1.1** ✅ full-thread reading via the backend API, message marks, locate-in-conversation, scratchpad, built-in prompt library, theme sync
 - **1.2** ✅ Chinese and English (the interface *and* the compiled prompt), switched from the top bar
+- **1.4** ✅ read-policy overhaul (gate + result dedup + growth split), manual paste import, centralized markers, CI
 - **Later** ◻ Claude / Gemini adapters, keyboard shortcuts, more validated presets
 
 ## Changelog

@@ -19,7 +19,9 @@ import {
 } from '../../lib/i18n';
 import { createId } from '../../lib/utils/id';
 import { conversationKey } from '../../lib/utils/conversation-key';
-import { reloadActiveTab, sendToActiveTab } from './messaging';
+import { readGate, sameMessages } from '../../lib/utils/read-governor';
+import type { PastedTurn } from '../../lib/utils/paste-split';
+import { sendToActiveTab } from './messaging';
 import { loadPrefs, savePrefs, type Prefs } from './prefs';
 import { loadSession, saveSession, clearSession, type SessionSnapshot } from './session';
 
@@ -160,7 +162,7 @@ type Action =
   | { type: 'load-error'; error: string; code?: UIKey }
   | { type: 'load-abort' }
   | { type: 'merge-messages'; messages: ConversationMessage[] }
-  | { type: 'load-abort' }
+  | { type: 'paste-messages'; messages: ConversationMessage[] }
   | { type: 'reset' }
   | { type: 'add-fragment'; groupId: string; fragment: Fragment }
   | { type: 'remove-fragment'; groupId: string; fragmentId: string }
@@ -198,6 +200,26 @@ function reducer(state: DistillerState, action: Action): DistillerState {
       return { ...state, status: 'loading', error: undefined, errorCode: undefined };
 
     case 'load-success': {
+      // Switching to a DIFFERENT conversation must not carry the previous one's
+      // material into the workspace — that silently mixed two threads. Module
+      // structure (including long-term modules) is kept; only fragments are
+      // dropped, and only when the conversation actually changed.
+      const switched =
+        !!state.conversation &&
+        conversationKey(state.conversation.url) !== conversationKey(action.conversation.url);
+      // Identical re-read (same conversation, same turns, same completeness):
+      // settle back to 'ready' WITHOUT touching anything else — no list identity
+      // churn (memoized rows don't re-render), no mark/group recomputation, and
+      // the periodic stream poll stops being visible at all.
+      if (
+        !switched &&
+        state.status === 'loading' &&
+        state.partial === action.partial &&
+        state.source === action.source &&
+        sameMessages(state.messages, action.messages)
+      ) {
+        return { ...state, status: 'ready', error: undefined, errorCode: undefined };
+      }
       // Keep only marks whose message is still in the freshly read conversation —
       // a same-conversation refresh keeps its marks; switching conversations drops
       // stale ones so the 已标记 count never counts another thread's messages.
@@ -206,13 +228,6 @@ function reducer(state: DistillerState, action: Action): DistillerState {
       for (const [id, note] of Object.entries(state.marks)) {
         if (ids.has(id)) marks[id] = note;
       }
-      // Switching to a DIFFERENT conversation must not carry the previous one's
-      // material into the workspace — that silently mixed two threads. Module
-      // structure (including long-term modules) is kept; only fragments are
-      // dropped, and only when the conversation actually changed.
-      const switched =
-        !!state.conversation &&
-        conversationKey(state.conversation.url) !== conversationKey(action.conversation.url);
       return {
         ...state,
         status: 'ready',
@@ -260,6 +275,23 @@ function reducer(state: DistillerState, action: Action): DistillerState {
         ...state,
         status: 'ready',
         messages: merged,
+      };
+    }
+
+    case 'paste-messages': {
+      // Manual paste import: append the turns as REAL message rows (ids
+      // `paste_…`), so pins, Q&A pairing, fragments and the session snapshot all
+      // work on them unchanged. Orders continue after what's on screen; a paste
+      // never claims a ChatGPT page position of its own (locate is hidden for
+      // these rows). Landing on a non-empty list also settles the intro away.
+      const base = state.messages.length;
+      const appended = action.messages.map((m, i) => ({ ...m, order: base + i }));
+      return {
+        ...state,
+        status: appended.length > 0 ? 'ready' : state.status,
+        error: undefined,
+        errorCode: undefined,
+        messages: [...state.messages, ...appended],
       };
     }
 
@@ -641,63 +673,77 @@ export function useDistiller() {
   const loadConversation = useCallback(
     async (
       quiet = false,
-      opts?: { background?: boolean; merge?: boolean; domOnly?: boolean },
+      opts?: { background?: boolean; merge?: boolean; domOnly?: boolean; force?: boolean },
     ): Promise<{
       ok: boolean;
       count: number;
       partial: boolean;
       error?: string;
       code?: UIKey;
+      /** True when the read-gate refused the backend read (throttle policy). */
+      skipped?: boolean;
     }> => {
-      dispatch({ type: 'load-start' });
-      const res = await sendToActiveTab({ kind: 'get-conversation', domOnly: opts?.domOnly === true });
-      if (res.kind === 'conversation' && res.ok) {
-        if (opts?.merge && res.partial) {
-          // DEEP LOAD step: grow the list instead of replacing it, so walking
-          // the page accumulates the whole thread across partial reads.
-          dispatch({ type: 'merge-messages', messages: res.messages });
-        } else {
-          dispatch({
-            type: 'load-success',
-            conversation: res.conversation,
-            messages: res.messages,
-            partial: res.partial,
-            source: res.source,
-          });
-        }
-        return { ok: true, count: res.messages.length, partial: res.partial };
+      // READ GATE: every BACKEND read shares the user's ChatGPT rate-limit
+      // budget with the page itself, so automatic triggers (stream poll,
+      // catch-up, growth upgrade) may be REFUSED when one just ran or is still
+      // running. domOnly reads are pure DOM — never gated. User-invoked reads
+      // pass `force` (skips the gap, still never concurrent).
+      const backend = opts?.domOnly !== true;
+      if (backend && !readGate.admit(opts?.force === true)) {
+        return { ok: false, count: 0, partial: false, skipped: true };
       }
-      const failed =
-        (res.kind === 'conversation' && !res.ok) || res.kind === 'error' ? res : undefined;
-      const error = failed?.error ?? '读取对话失败。';
-      const code = failed?.code ?? 'err.readFailed';
-      if (!quiet) dispatch({ type: 'load-error', error, code });
-      else if (opts?.background) dispatch({ type: 'load-abort' });
-      return { ok: false, count: 0, partial: false, error, code };
+      try {
+        dispatch({ type: 'load-start' });
+        const res = await sendToActiveTab({ kind: 'get-conversation', domOnly: opts?.domOnly === true });
+        if (res.kind === 'conversation' && res.ok) {
+          if (opts?.merge && res.partial) {
+            // DEEP LOAD step: grow the list instead of replacing it, so walking
+            // the page accumulates the whole thread across partial reads.
+            dispatch({ type: 'merge-messages', messages: res.messages });
+          } else {
+            dispatch({
+              type: 'load-success',
+              conversation: res.conversation,
+              messages: res.messages,
+              partial: res.partial,
+              source: res.source,
+            });
+          }
+          return { ok: true, count: res.messages.length, partial: res.partial };
+        }
+        const failed =
+          (res.kind === 'conversation' && !res.ok) || res.kind === 'error' ? res : undefined;
+        const error = failed?.error ?? '读取对话失败。';
+        const code = failed?.code ?? 'err.readFailed';
+        if (!quiet) dispatch({ type: 'load-error', error, code });
+        else if (opts?.background) dispatch({ type: 'load-abort' });
+        return { ok: false, count: 0, partial: false, error, code };
+      } finally {
+        // A failed request consumed rate-limit budget just the same — stamp it.
+        if (backend) readGate.release();
+      }
     },
     [],
   );
 
   /**
-   * Reload the page for the user, then poll until the freshly loaded content
-   * script answers (re-injects at document_idle, then ChatGPT renders — a few
-   * seconds). Saves the user a manual refresh after a read failure.
+   * "重试" WITHOUT touching the user's tab: quiet in-place attempts with a
+   * short backoff. v1.3 reloaded the ChatGPT tab for the user and polled it up
+   * to 30 times — hostile when they were mid-something in that tab. Self-heal
+   * already re-injects an orphaned content script transparently; anything
+   * deeper (stale page, logged out) needs a human at the keyboard anyway, and
+   * the error screen says so. Early attempts are DOM-only (instant once the
+   * page has anything mounted); the final attempt may hit the backend.
    */
-  const retryWithReload = useCallback(
+  const retryRead = useCallback(
     async (): Promise<{ ok: boolean; count: number; partial: boolean }> => {
       dispatch({ type: 'load-start' });
-      const reloaded = await reloadActiveTab();
-      if (!reloaded) {
-        dispatch({
-          type: 'load-error',
-          error: '请先切换到并聚焦 ChatGPT 对话标签页（chatgpt.com），再点重试。',
-          code: 'err.focusChatgptTab',
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        if (attempt > 0) await delay(800 * attempt);
+        const res = await sendToActiveTab({
+          kind: 'get-conversation',
+          domOnly: attempt < 2,
         });
-        return { ok: false, count: 0, partial: false };
-      }
-      for (let attempt = 0; attempt < 30; attempt += 1) {
-        await delay(700);
-        const res = await sendToActiveTab({ kind: 'get-conversation' });
         if (res.kind === 'conversation' && res.ok) {
           dispatch({
             type: 'load-success',
@@ -709,11 +755,7 @@ export function useDistiller() {
           return { ok: true, count: res.messages.length, partial: res.partial };
         }
       }
-      dispatch({
-        type: 'load-error',
-        error: '刷新后仍未读取到消息，请确认页面已打开一个对话后再重试。',
-        code: 'err.reloadNoMessages',
-      });
+      dispatch({ type: 'load-error', error: '未读取到消息。', code: 'err.noMessages' });
       return { ok: false, count: 0, partial: false };
     },
     [],
@@ -750,12 +792,31 @@ export function useDistiller() {
     });
   }, []);
 
+  /**
+   * Paste import — the product's floor when reading is unavailable. Turns join
+   * state.messages as real rows, so every downstream behavior (pins, Q&A
+   * pairing, fragments, snapshot) works unchanged. Returns how many landed.
+   */
+  const addPastedMessages = useCallback((turns: PastedTurn[]): number => {
+    if (turns.length === 0) return 0;
+    const messages: ConversationMessage[] = turns.map((turn) => ({
+      id: createId('paste'),
+      role: turn.role,
+      text: turn.text,
+      order: 0, // assigned by the reducer, continuing after what's on screen
+      source: 'pasted',
+    }));
+    dispatch({ type: 'paste-messages', messages });
+    return messages.length;
+  }, []);
+
   const actions = useMemo(
     () => ({
       loadConversation,
-      retryWithReload,
+      retryRead,
       addMessageFragment,
       addSelection,
+      addPastedMessages,
       removeFragment: (groupId: string, fragmentId: string) =>
         dispatch({ type: 'remove-fragment', groupId, fragmentId }),
       moveFragment: (groupId: string, fragmentId: string, dir: -1 | 1) =>
@@ -807,7 +868,7 @@ export function useDistiller() {
       /** Pin the interface + compiled-prompt language (persisted as config). */
       setLang: (pref: LangPref) => dispatch({ type: 'set-lang', pref }),
     }),
-    [loadConversation, retryWithReload, addMessageFragment, addSelection],
+    [loadConversation, retryRead, addMessageFragment, addSelection, addPastedMessages],
   );
 
   return { state, actions };
