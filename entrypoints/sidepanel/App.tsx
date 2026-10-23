@@ -794,7 +794,9 @@ export function App() {
                 {t('import.open')}
               </button>
             </div>
-            <p className="hint tiny">{t('intro.scope')}</p>
+            <p className="hint tiny">
+              {t('intro.scope')} · v{browser.runtime.getManifest().version}
+            </p>
             {link === 'dead' && <p className="hint tiny">{t('link.dead')}</p>}
             {link === 'nopage' && <p className="hint tiny">{t('link.nopage')}</p>}
           </div>
@@ -904,6 +906,9 @@ export function App() {
           </label>
           <span className="muted tiny">
             {t('footer.counts', { fragments: result.fragmentCount, chars: result.charCount })}
+          </span>
+          <span className="muted tiny" title="Context Distiller">
+            v{browser.runtime.getManifest().version}
           </span>
         </div>
         <div className="footer-actions">
