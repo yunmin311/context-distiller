@@ -143,6 +143,8 @@ export default defineUnlistedScript(() => {
    * conversation fetch 401s, and the retry re-fetches it.
    */
   let tokenCache: { value: string; until: number } | null = null;
+  let cache: { id: string; at: number; messages: MwRawMessage[] } | null = null;
+  const CACHE_TTL_MS = 30_000;
 
   async function getAccessToken(): Promise<string> {
     if (tokenCache && Date.now() < tokenCache.until) return tokenCache.value;
@@ -166,6 +168,16 @@ export default defineUnlistedScript(() => {
   async function extractViaApi(): Promise<MwRawMessage[]> {
     const convId = location.pathname.match(CONVERSATION_ID_RE)?.[1];
     if (!convId) throw new Error('no conversation id in URL (not on a /c/ page)');
+
+    // Single-entry response cache: the partial→full upgrade, the periodic poll
+    // and the end-of-stream catch-up all fetch the SAME conversation within
+    // seconds of each other. A fresh cache serves them instantly and costs the
+    // endpoint (and the user's rate-limit budget) nothing. Bounded: one
+    // conversation's worth of strings, 30 seconds — the panel already holds the
+    // same data in memory.
+    if (cache && cache.id === convId && Date.now() - cache.at < CACHE_TTL_MS) {
+      return cache.messages;
+    }
 
     const token = await getAccessToken();
 
@@ -221,6 +233,7 @@ export default defineUnlistedScript(() => {
       }
     }
     if (out.length === 0) throw new Error('no user/assistant turns after filtering');
+    cache = { id: convId, at: Date.now(), messages: out };
     return out;
   }
 

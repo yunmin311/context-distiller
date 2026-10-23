@@ -48,6 +48,33 @@ export class ReadGate {
     return true;
   }
 
+  /**
+   * WAITING admission — the v1.4.2 redesign. v1.4.0's admit() REFUSED reads
+   * inside the gap window, which silently DROPPED the partial→full upgrade
+   * read: the list stayed half-read forever and users waited on a completion
+   * that never came. A scheduling gate DEFERS instead: background reads wait
+   * (bounded) for the gap to elapse and then run; foreground force reads only
+   * wait for an in-flight read. Returns false only on timeout.
+   */
+  async acquire(
+    opts: { force?: boolean; maxWaitMs?: number; pollMs?: number } = {},
+  ): Promise<boolean> {
+    const deadline = Date.now() + (opts.maxWaitMs ?? 25_000);
+    const pollMs = opts.pollMs ?? 400;
+    for (;;) {
+      const now = Date.now();
+      if (
+        !this.busy &&
+        (opts.force === true || now - this.lastAt >= BACKEND_MIN_GAP_MS)
+      ) {
+        this.busy = true;
+        return true;
+      }
+      if (now >= deadline) return false;
+      await new Promise((r) => setTimeout(r, pollMs));
+    }
+  }
+
   /** Call in `finally` after the read settles — success or failure both count:
    *  a failed request consumed rate-limit budget just the same. */
   release(now = Date.now()): void {

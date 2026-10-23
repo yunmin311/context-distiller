@@ -729,13 +729,20 @@ export function useDistiller() {
       skipped?: boolean;
     }> => {
       // READ GATE: every BACKEND read shares the user's ChatGPT rate-limit
-      // budget with the page itself, so automatic triggers (stream poll,
-      // catch-up, growth upgrade) may be REFUSED when one just ran or is still
-      // running. domOnly reads are pure DOM — never gated. User-invoked reads
-      // pass `force` (skips the gap, still never concurrent).
+      // budget with the page itself. v1.4.0 REFUSED reads inside the gap —
+      // which silently dropped the partial→full upgrade and left users staring
+      // at a half-read list. Since v1.4.2 the gate DEFERS: background reads
+      // wait (bounded) for the gap, foreground reads only wait out an in-flight
+      // one. domOnly reads are pure DOM — never gated.
       const backend = opts?.domOnly !== true;
-      if (backend && !readGate.admit(opts?.force === true)) {
-        return { ok: false, count: 0, partial: false, skipped: true };
+      if (backend) {
+        const admitted = await readGate.acquire({
+          force: opts?.force === true,
+          maxWaitMs: opts?.background === true ? 25_000 : 6_000,
+        });
+        if (!admitted) {
+          return { ok: false, count: 0, partial: false, skipped: true };
+        }
       }
       try {
         dispatch({ type: 'load-start', background: opts?.background === true });

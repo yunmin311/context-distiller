@@ -778,17 +778,17 @@ async function seekToMessage(messageId: string, orderedIds: string[]): Promise<H
   // position is stale by the time it applies. Stepping can't overshoot by more than
   // one screen, which is why this lands on the first click instead of the third.
   //
-  // PROGRESS-AWARE BUDGET (v1.4): a fixed 40-step budget gave up on far targets —
-  // the virtualizer feeds rows at its own pace, and when it lags a step or two the
-  // old walk burned its budget standing still and failed with「找不到」. Now the
-  // budget only burns while the mounted band STANDS STILL: movement toward the
-  // target resets the stall counter, a stalled step waits longer (giving the
-  // virtualizer time to mount instead of being stepped past), and only ~6
-  // consecutive stalls give up.
+  // v1.4.2: the 1.4.0 "stall-break" (6 static steps → abort) made seeks fail MORE
+  // than 1.3's dumb walk — on huge threads the virtualizer routinely takes
+  // seconds to feed rows, and the break fired long before the budget did. Back
+  // to a TIME-CAPPED walk: up to 64 steps, never longer than 15s; stalled steps
+  // wait longer (give the virtualizer time to mount) instead of aborting.
   const step = Math.max(200, container.clientHeight * 0.8);
+  const deadline = Date.now() + 15_000;
   let bandKey = '';
   let stalled = 0;
   for (let attempt = 0; attempt < 64; attempt += 1) {
+    if (Date.now() > deadline) break;
     const mounted = mountedOrders();
     let dir = 0;
     if (mounted.length === 0) {
@@ -811,7 +811,6 @@ async function seekToMessage(messageId: string, orderedIds: string[]): Promise<H
       stalled = 0;
       bandKey = key;
     }
-    if (stalled >= 6) break; // the page stopped feeding rows — give up cleanly
 
     const extent = maxTop();
     const next = Math.max(0, Math.min(extent, top + dir * step));
@@ -820,7 +819,7 @@ async function seekToMessage(messageId: string, orderedIds: string[]): Promise<H
 
     beginProgrammaticScroll(1200); // keep the follow push muted for the whole hunt
     container.scrollTo({ top, behavior: 'auto' });
-    await wait(stalled >= 2 ? 420 : 190);
+    await wait(stalled >= 2 ? 450 : 190);
 
     const hit = document.querySelector<HTMLElement>(sel);
     if (hit) return hit;

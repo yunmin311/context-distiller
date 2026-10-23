@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ConversationMessage } from '../core/types';
 import { BACKEND_MIN_GAP_MS, ReadGate, messageSignature, sameMessages } from './read-governor';
 
@@ -39,6 +39,59 @@ describe('shouldReadBackend / ReadGate', () => {
     gate.release(500); // the read finished (failed) at t=500
     expect(gate.admit(false, 500 + BACKEND_MIN_GAP_MS - 1)).toBe(false);
     expect(gate.admit(false, 500 + BACKEND_MIN_GAP_MS)).toBe(true);
+  });
+
+  it('acquire DEFERS a background read until the gap elapses (never drops it)', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(50_000);
+    try {
+      const gate = new ReadGate();
+      gate.admit(false);
+      gate.release(50_000); // gap ends at 50_000 + BACKEND_MIN_GAP_MS
+      const p = gate.acquire({ maxWaitMs: 30_000, pollMs: 100 });
+      let result: boolean | undefined;
+      void p.then((r) => (result = r));
+      await vi.advanceTimersByTimeAsync(BACKEND_MIN_GAP_MS - 500);
+      expect(result).toBeUndefined(); // still deferring
+      await vi.advanceTimersByTimeAsync(1_500);
+      expect(result).toBe(true); // deferred — then admitted
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('acquire returns false when the wait budget runs out (busy forever)', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(50_000);
+    try {
+      const gate = new ReadGate();
+      gate.admit(true); // busy, never released
+      const p = gate.acquire({ force: true, maxWaitMs: 1_000, pollMs: 100 });
+      let result: boolean | undefined;
+      void p.then((r) => (result = r));
+      await vi.advanceTimersByTimeAsync(1_500);
+      expect(result).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('acquire with force admits immediately when idle, even inside a gap', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(50_000);
+    try {
+      const gate = new ReadGate();
+      gate.admit(false);
+      gate.release(50_000);
+      const ok = await gate.acquire({ force: true, maxWaitMs: 100, pollMs: 10 });
+      expect(ok).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 });
 
