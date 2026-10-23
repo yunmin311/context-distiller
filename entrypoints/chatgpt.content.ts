@@ -301,6 +301,7 @@ let mwCounter = 0;
 function requestMainWorld(
   timeoutMs: number,
   action: MwRequest['action'] = 'extract',
+  bypassCache = false,
 ): Promise<MwResponse | null> {
   return new Promise((resolve) => {
     const id = `mw_${mwCounter++}_${Math.random().toString(36).slice(2, 8)}`;
@@ -316,7 +317,9 @@ function requestMainWorld(
 
     window.addEventListener(MW_RESPONSE_EVENT, onResponse);
     window.dispatchEvent(
-      new CustomEvent<MwRequest>(MW_REQUEST_EVENT, { detail: { id, action } }),
+      new CustomEvent<MwRequest>(MW_REQUEST_EVENT, {
+        detail: { id, action, bypassCache: bypassCache || undefined },
+      }),
     );
 
     setTimeout(() => {
@@ -381,7 +384,7 @@ async function getConversation(message: PanelRequest & { kind: 'get-conversation
   const domOnly = message.domOnly === true;
   const apiPromise = domOnly
     ? null
-    : requestMainWorld(40000, 'extract-api');
+    : requestMainWorld(40000, 'extract-api', message.bypassCache === true);
   const api = apiPromise
     ? await Promise.race([
         apiPromise,
@@ -537,22 +540,10 @@ async function deepWalkStep(toTop: boolean): Promise<PanelResponse> {
  * mounts. If it still can't be found, we say so instead of guessing.
  */
 async function scrollToMessage(messageId: string, orderedIds?: string[]): Promise<PanelResponse> {
-  // While ChatGPT is generating it pins the view to the bottom — a seek fights
-  // that and always loses, and used to surface as a mysterious「找不到」.
-  // Deliberately keyed on the VISIBLE STOP BUTTON only: the streaming class can
-  // linger on rows long after a run, and a false refusal here reads as "locate
-  // is permanently broken" — the exact bug this guard once caused.
-  const stop = document.querySelector<HTMLElement>(STOP_BUTTON_SELECTOR);
-  const stopVisible =
-    !!stop && (stop.offsetParent !== null || stop.getClientRects().length > 0);
-  if (stopVisible) {
-    return {
-      kind: 'scroll-result',
-      ok: false,
-      error: '正在生成回答，视图会一直钉在底部；等输出结束后再定位。',
-      code: 'err.scrollWhileGenerating',
-    };
-  }
+  // NO generating-guard here (v1.4.2 lesson): the "visible stop button" test
+  // misfired on real ChatGPT UIs and permanently refused locate — the user's
+  // BEST feature. 1.3 semantics restored: always attempt; worst case the seek
+  // fails and the page returns to where it was.
   const sel = messageByIdSelector(messageId);
   // Mute the follow push for the whole operation (extended by each seek step).
   beginProgrammaticScroll(2000);
@@ -784,10 +775,10 @@ async function seekToMessage(messageId: string, orderedIds: string[]): Promise<H
   // to a TIME-CAPPED walk: up to 64 steps, never longer than 15s; stalled steps
   // wait longer (give the virtualizer time to mount) instead of aborting.
   const step = Math.max(200, container.clientHeight * 0.8);
-  const deadline = Date.now() + 15_000;
+  const deadline = Date.now() + 20_000;
   let bandKey = '';
   let stalled = 0;
-  for (let attempt = 0; attempt < 64; attempt += 1) {
+  for (let attempt = 0; attempt < 80; attempt += 1) {
     if (Date.now() > deadline) break;
     const mounted = mountedOrders();
     let dir = 0;

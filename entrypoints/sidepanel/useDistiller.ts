@@ -718,7 +718,13 @@ export function useDistiller() {
   const loadConversation = useCallback(
     async (
       quiet = false,
-      opts?: { background?: boolean; merge?: boolean; domOnly?: boolean; force?: boolean },
+      opts?: {
+        background?: boolean;
+        merge?: boolean;
+        domOnly?: boolean;
+        force?: boolean;
+        bypassCache?: boolean;
+      },
     ): Promise<{
       ok: boolean;
       count: number;
@@ -746,7 +752,11 @@ export function useDistiller() {
       }
       try {
         dispatch({ type: 'load-start', background: opts?.background === true });
-        const res = await sendToActiveTab({ kind: 'get-conversation', domOnly: opts?.domOnly === true });
+        const res = await sendToActiveTab({
+          kind: 'get-conversation',
+          domOnly: opts?.domOnly === true,
+          bypassCache: opts?.bypassCache === true || undefined,
+        });
         if (res.kind === 'conversation' && res.ok) {
           if (opts?.merge && res.partial) {
             // DEEP LOAD step: grow the list instead of replacing it, so walking

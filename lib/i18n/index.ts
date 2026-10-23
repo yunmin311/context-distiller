@@ -80,6 +80,7 @@ const zh = {
   'toast.read': '已读取 {count} 条消息',
   'toast.readPartial': '已读取 {count} 条 · 超长对话可向上滚动加载后再刷新',
   'toast.imported': '已导入 {count} 条消息',
+  'toast.forceLoad': '强制加载：正在拉取完整对话…',
   'toast.reloaded': '已刷新页面并读取 {count} 条消息',
   'toast.reloadedPartial': '已刷新并读取 {count} 条 · 超长对话可向上滚动加载后再刷新',
   'toast.added': '已加入到「{group}」',
@@ -267,6 +268,7 @@ const en: Record<UIKey, string> = {
   'toast.read': 'Read {count} messages',
   'toast.readPartial': 'Read {count} · scroll up in ChatGPT to load more, then refresh',
   'toast.imported': 'Imported {count} messages',
+  'toast.forceLoad': 'Force load: fetching the full conversation…',
   'toast.reloaded': 'Reloaded the page and read {count} messages',
   'toast.reloadedPartial':
     'Reloaded and read {count} · scroll up in ChatGPT to load more, then refresh',

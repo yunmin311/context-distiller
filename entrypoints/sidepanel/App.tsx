@@ -304,7 +304,7 @@ export function App() {
   // made the start button feel dead.
   const loadingRef = useRef(false);
   const handleLoad = useCallback(
-    async (silent = false, opts?: { domOnlyFirst?: boolean }) => {
+    async (silent = false, opts?: { domOnlyFirst?: boolean; forceBackend?: boolean }) => {
       if (loadingRef.current) {
         // A pipeline is already running. Silence reads as "the button is dead" —
         // tell the user their click landed and something IS in flight.
@@ -314,14 +314,24 @@ export function App() {
       loadingRef.current = true;
       try {
         const domFirst = !!opts?.domOnlyFirst;
+        const forceBackend = !!opts?.forceBackend;
         if (!domFirst) {
           // User-invoked read: skip the gate's gap window (their click IS the
           // authorization) — the gate still prevents overlap.
           forceSnapRef.current = true;
         }
+        if (forceBackend) {
+          // Immediate, unmistakable feedback: this read goes straight to the
+          // backend for the FULL thread and may take a while on giant threads.
+          setToast({ text: t('toast.forceLoad'), tone: 'ok' });
+        }
         let res = await actions.loadConversation(
           true,
-          domFirst ? { domOnly: true } : { force: true },
+          domFirst
+            ? { domOnly: true }
+            : forceBackend
+              ? { force: true, bypassCache: true }
+              : undefined,
         );
         // Slow page: retry QUIETLY with a growing backoff — up to ~30s. Early
         // retries are DOM-only (instant once the page has anything mounted);
@@ -434,10 +444,11 @@ export function App() {
       void runDeepLoad();
       return;
     }
-    // Manual refresh reads DOM-first too: the mounted list lands in well under a
-    // second and a gated background read upgrades it to the full thread. Waiting
-    // out the 4s backend race on every click was the "refresh feels slow" hang.
-    void handleLoad(false, { domOnlyFirst: true });
+    // TOP-RIGHT REFRESH = FORCE LOAD (user directive): straight to the backend
+    // for the complete thread — skips the 30s response cache AND the gate's gap
+    // window, with a toast the moment it starts. The polite DOM-first read
+    // stays on the intro button.
+    void handleLoad(false, { forceBackend: true });
   }, [handleLoad, runDeepLoad]);
 
   // Auto-read on open when the active tab is a ChatGPT page, so the panel lands

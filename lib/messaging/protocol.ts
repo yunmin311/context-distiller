@@ -12,7 +12,13 @@
 
 export type PanelRequest =
   | { kind: 'ping' }
-  | { kind: 'get-conversation'; domOnly?: boolean }
+  | {
+      kind: 'get-conversation';
+      domOnly?: boolean;
+      /** Skip the main-world response cache and refresh it — a user-forced
+       *  load must never serve 30s-old data. */
+      bypassCache?: boolean;
+    }
   | { kind: 'get-selection' }
   | { kind: 'fill-composer'; text: string }
   | { kind: 'get-theme' }
@@ -145,6 +151,8 @@ export interface MwRequest {
    *  COMPLETE conversation from ChatGPT's backend (runs in the page world so the
    *  same-origin session auth works). */
   action: 'extract' | 'extract-api';
+  /** Ignore and refresh the response cache (user-forced loads). */
+  bypassCache?: boolean;
 }
 
 export interface MwRawMessage {

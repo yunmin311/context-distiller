@@ -165,7 +165,7 @@ export default defineUnlistedScript(() => {
    * Throws a descriptive error on every failure path (instead of returning null),
    * so the content script can log WHY it fell back to the partial DOM read.
    */
-  async function extractViaApi(): Promise<MwRawMessage[]> {
+  async function extractViaApi(bypassCache = false): Promise<MwRawMessage[]> {
     const convId = location.pathname.match(CONVERSATION_ID_RE)?.[1];
     if (!convId) throw new Error('no conversation id in URL (not on a /c/ page)');
 
@@ -174,8 +174,8 @@ export default defineUnlistedScript(() => {
     // seconds of each other. A fresh cache serves them instantly and costs the
     // endpoint (and the user's rate-limit budget) nothing. Bounded: one
     // conversation's worth of strings, 30 seconds — the panel already holds the
-    // same data in memory.
-    if (cache && cache.id === convId && Date.now() - cache.at < CACHE_TTL_MS) {
+    // same data in memory. User-forced loads bypass AND refresh it.
+    if (!bypassCache && cache && cache.id === convId && Date.now() - cache.at < CACHE_TTL_MS) {
       return cache.messages;
     }
 
@@ -244,7 +244,7 @@ export default defineUnlistedScript(() => {
       window.dispatchEvent(new CustomEvent(MW_RESPONSE_EVENT, { detail: r }));
 
     if (detail.action === 'extract-api') {
-      extractViaApi()
+      extractViaApi(detail.bypassCache === true)
         .then((messages) =>
           respond({
             id: detail.id,
