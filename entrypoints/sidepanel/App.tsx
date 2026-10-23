@@ -814,6 +814,12 @@ export function App() {
             <p className="muted tiny">
               {state.errorCode && isUIKey(state.errorCode) ? t(state.errorCode) : state.error}
             </p>
+            {/* The page side attaches layer counts / diagnostics to some errors —
+                show them as a second line instead of letting the template hide
+                them. */}
+            {state.errorCode && isUIKey(state.errorCode) && state.error !== t(state.errorCode) && (
+              <p className="hint tiny">{state.error}</p>
+            )}
             {link !== 'unknown' && link !== 'ok' && (
               <p className="hint tiny">{t(link === 'nopage' ? 'link.nopage' : 'link.dead')}</p>
             )}

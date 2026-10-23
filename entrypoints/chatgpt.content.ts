@@ -4,6 +4,7 @@ import type { RawMessage } from '../lib/platform/adapter';
 import { chatgptAdapter } from '../lib/platform/chatgpt-adapter';
 import {
   AUTHOR_ROLE_ATTR,
+  CONVERSATION_ID_RE,
   MESSAGE_ID_ATTR,
   MESSAGE_SELECTOR,
   SEND_BUTTON_SELECTOR,
@@ -371,6 +372,9 @@ async function getConversation(message: PanelRequest & { kind: 'get-conversation
   let raw: RawMessage[];
   let source: MessageSource;
   let partial: boolean;
+  // How many turns the page-world bridge contributed — part of the no-messages
+  // diagnostic line (0 there means the fiber walk found nothing either).
+  let bridgeCount = 0;
 
   // DOM-ONLY mode (deep-load walk): skip the backend entirely — zero pressure
   // on a throttling endpoint, and each walk step returns in milliseconds.
@@ -416,6 +420,7 @@ async function getConversation(message: PanelRequest & { kind: 'get-conversation
           : d,
       );
       source = mwText.size > 0 ? 'page-data' : 'dom';
+      bridgeCount = mwText.size;
     } else {
       const mw = await requestMainWorld(400);
       raw =
@@ -423,6 +428,7 @@ async function getConversation(message: PanelRequest & { kind: 'get-conversation
           ? mw.messages.map((m) => ({ id: m.id, role: m.role, text: m.text, source: 'page-data' as const }))
           : [];
       source = 'page-data';
+      bridgeCount = mw?.ok && mw.messages ? mw.messages.length : 0;
     }
     partial = true;
 
@@ -469,10 +475,19 @@ async function getConversation(message: PanelRequest & { kind: 'get-conversation
 
   const messages = normalizeMessages(raw);
   if (messages.length === 0) {
+    // ZERO readable turns is the one failure the panel cannot classify on its
+    // own — ship the layer counts so the error line alone pins which layer is
+    // broken (no page nodes → wrong page or a ChatGPT markup change; nodes but
+    // no raw turns → text extraction; raw turns but no normalized → filtering).
+    const domNodes = document.querySelectorAll(MESSAGE_SELECTOR).length;
+    const onConversation = CONVERSATION_ID_RE.test(location.pathname);
+    const detail = onConversation
+      ? `诊断：页面消息节点 ${domNodes} 个 → 原始消息 ${raw.length} 条（其中页面数据 ${bridgeCount} 条）。`
+      : '当前是还没有消息的新对话 —— 先发出第一条消息，再读取。';
     return {
       kind: 'conversation',
       ok: false,
-      error: '未读取到消息。请确认已打开一个对话；超长对话可向上滚动加载后再刷新。',
+      error: `未读取到消息。${detail}`,
       code: 'err.noMessages',
     };
   }
