@@ -715,6 +715,10 @@ export function useDistiller() {
           (res.kind === 'conversation' && !res.ok) || res.kind === 'error' ? res : undefined;
         const error = failed?.error ?? '读取对话失败。';
         const code = failed?.code ?? 'err.readFailed';
+        // Quiet/background failures are invisible BY DESIGN in the UI — leave a
+        // trace in the panel console so a "nothing happened" report is diagnosable
+        // (panel DevTools → console).
+        console.warn(`[Context Distiller] read failed (${code}): ${error}`);
         if (!quiet) dispatch({ type: 'load-error', error, code });
         else if (opts?.background) dispatch({ type: 'load-abort' });
         return { ok: false, count: 0, partial: false, error, code };

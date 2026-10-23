@@ -262,7 +262,12 @@ export function App() {
   const loadingRef = useRef(false);
   const handleLoad = useCallback(
     async (silent = false, opts?: { domOnlyFirst?: boolean }) => {
-      if (loadingRef.current) return; // one read pipeline at a time
+      if (loadingRef.current) {
+        // A pipeline is already running. Silence reads as "the button is dead" —
+        // tell the user their click landed and something IS in flight.
+        if (!silent) setToast({ text: t('status.loading'), tone: 'ok' });
+        return;
+      }
       loadingRef.current = true;
       try {
         const domFirst = !!opts?.domOnlyFirst;
@@ -386,7 +391,10 @@ export function App() {
       void runDeepLoad();
       return;
     }
-    void handleLoad();
+    // Manual refresh reads DOM-first too: the mounted list lands in well under a
+    // second and a gated background read upgrades it to the full thread. Waiting
+    // out the 4s backend race on every click was the "refresh feels slow" hang.
+    void handleLoad(false, { domOnlyFirst: true });
   }, [handleLoad, runDeepLoad]);
 
   // Auto-read on open when the active tab is a ChatGPT page, so the panel lands
@@ -728,7 +736,10 @@ export function App() {
             <h1>{t('intro.title')}</h1>
             <p className="muted">{t('intro.body')}</p>
             <div className="intro-actions">
-              <button className="btn btn-primary" onClick={() => handleLoad()}>
+              {/* Clicking flips status to 'loading', which unmounts this whole
+                  intro and swaps in the「正在读取当前对话…」placeholder — that
+                  swap IS the loading state; no in-button spinner needed. */}
+              <button className="btn btn-primary" onClick={() => handleLoad(false, { domOnlyFirst: true })}>
                 {t('intro.read')}
               </button>
               <button className="btn btn-outline" onClick={() => setImportOpen(true)}>
