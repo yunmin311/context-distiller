@@ -552,6 +552,15 @@ async function scrollToMessage(messageId: string, orderedIds?: string[]): Promis
       };
     }
   }
+  if (!el) {
+    // Not mounted and no ordered ids to seek with — cannot reach it.
+    return {
+      kind: 'scroll-result',
+      ok: false,
+      error: '这条暂时没找到，请刷新页面后再试。',
+      code: 'err.scrollNotFound',
+    };
+  }
   beginProgrammaticScroll(1400);
   el.scrollIntoView({ block: 'center', behavior: 'smooth' });
   // The virtualizer keeps RE-LAYOUTING after we arrive (heights above the
