@@ -268,6 +268,13 @@ function reducer(state: DistillerState, action: Action): DistillerState {
         byId.set(m.id, !prev || m.text.length > prev.text.length ? m : prev);
       }
       const merged = [...byId.values()].sort((a, b) => a.order - b.order);
+      // A merge that adds NOTHING (the usual case once the list is complete) must
+      // not churn list identity — every identity change re-renders the whole list
+      // and re-runs the viewport effects. ChatGPT's progressive hydration fires
+      // growth pushes in bursts; without this guard the panel strobes.
+      if (sameMessages(state.messages, merged)) {
+        return state.status === 'ready' ? state : { ...state, status: 'ready' };
+      }
       // Back to 'ready': the merge IS the completion of this background read.
       // Leaving 'loading' here kept the spinner alive forever AND gated the
       // viewport-anchor effect (which only runs when ready).

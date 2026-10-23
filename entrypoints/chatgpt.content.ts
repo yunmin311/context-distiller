@@ -4,10 +4,11 @@ import type { RawMessage } from '../lib/platform/adapter';
 import { chatgptAdapter } from '../lib/platform/chatgpt-adapter';
 import {
   AUTHOR_ROLE_ATTR,
-  GENERATING_SELECTOR,
   MESSAGE_ID_ATTR,
   MESSAGE_SELECTOR,
   SEND_BUTTON_SELECTOR,
+  STOP_BUTTON_SELECTOR,
+  STREAMING_CLASS_SELECTOR,
   THEME_ACCENT_VARS,
   messageByIdSelector,
 } from '../lib/platform/chatgpt-markers';
@@ -75,7 +76,14 @@ export default defineContentScript({
  * treated as active, so a rename of one can't blind us.
  */
 function isGenerating(): boolean {
-  return !!document.querySelector(GENERATING_SELECTOR);
+  // VISIBILITY-CHECKED: ChatGPT has been seen to leave a hidden STOP button (or
+  // a stale streaming class) in the DOM after a run finishes. Existence alone
+  // then read as "generating" FOREVER — which v1.4's locate guard turned into
+  // "locate is permanently refused". Both signals must actually be on screen.
+  const stop = document.querySelector<HTMLElement>(STOP_BUTTON_SELECTOR);
+  if (stop && (stop.offsetParent !== null || stop.getClientRects().length > 0)) return true;
+  const streaming = document.querySelector<HTMLElement>(STREAMING_CLASS_SELECTOR);
+  return !!streaming && streaming.getClientRects().length > 0;
 }
 
 /**

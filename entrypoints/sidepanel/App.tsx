@@ -60,6 +60,19 @@ export function App() {
   const [scratchpadOpen, setScratchpadOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [toast, setToast] = useState<Toast | null>(null);
+  // The load bar stays on for a grace period AFTER a read settles: reads fire in
+  // bursts (hydration growth, poll + upgrade), and a bar that blinks on/off per
+  // read reads as the panel twitching. A steady line says "working"; a clean end
+  // says "done".
+  const [loadBarOn, setLoadBarOn] = useState(false);
+  useEffect(() => {
+    if (state.status === 'loading') {
+      setLoadBarOn(true);
+      return;
+    }
+    const t = setTimeout(() => setLoadBarOn(false), 700);
+    return () => clearTimeout(t);
+  }, [state.status]);
 
   useEffect(() => {
     if (!state.groups.some((g) => g.id === activeGroupId)) {
@@ -671,9 +684,10 @@ export function App() {
     <LangProvider lang={lang}>
     <div className="app">
       {/* ANY read in flight — foreground, background, or the periodic poll — shows
-          this thin bar. Background reads are silent by design in every other way,
-          but "something is happening" must always be visible at a glance. */}
-      {state.status === 'loading' && <div className="loadbar" aria-hidden />}
+          this thin bar (held ~0.7s after settle so bursts read as one steady run).
+          Background reads are silent by design in every other way, but "something
+          is happening" must always be visible at a glance. */}
+      {loadBarOn && <div className="loadbar" aria-hidden />}
       <header className="topbar">
         <span className="brand-mark">
           <Logo />
@@ -711,7 +725,7 @@ export function App() {
         >
           {t('top.import')}
         </button>
-        {state.status === 'ready' && (
+        {state.messages.length > 0 && (
           <span className="muted tiny topbar-count">{state.messages.length}</span>
         )}
         <button

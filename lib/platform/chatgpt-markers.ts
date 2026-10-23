@@ -44,9 +44,11 @@ export const messageByIdSelector = (id: string): string =>
 export const COMPOSER_SELECTOR =
   '#prompt-textarea, textarea[data-testid="prompt-textarea"], div[contenteditable="true"]#prompt-textarea';
 
-/** Composer STOP button while generating, or the streaming highlight class.
- *  Either alone means "an answer is being generated". */
-export const GENERATING_SELECTOR = '[data-testid="stop-button"], .result-streaming';
+/** Composer STOP button shown while an answer is generating. */
+export const STOP_BUTTON_SELECTOR = '[data-testid="stop-button"]';
+
+/** Highlight class on the answer currently streaming in. */
+export const STREAMING_CLASS_SELECTOR = '.result-streaming';
 
 /** Active conversation title in ChatGPT's sidebar nav. */
 export const TITLE_NAV_SELECTOR = 'nav a[aria-current="page"], nav li[data-active] a';
