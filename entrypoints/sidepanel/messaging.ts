@@ -26,6 +26,28 @@ export async function activeTabIsSupported(): Promise<boolean> {
 const SEND_TIMEOUT_MS = 45_000;
 
 /**
+ * Reload the active tab — used by "重试". RESTORED in 1.4.1 by user verdict:
+ * the 1.3 behavior (retry = reload the page) was empirically the smoothest,
+ * because the dominant real-world failure is a LONG-LIVED ChatGPT tab whose
+ * client state has gone stale (pre-update bundle, half-hydrated virtualizer,
+ * discarded-and-restored renderer). No amount of re-reading fixes that; a
+ * fresh page load does, every time. Guarded to a ChatGPT tab so a user who
+ * switched to another tab never loses ITS unsaved state.
+ */
+export async function reloadActiveTab(): Promise<boolean> {
+  const tab = await getActiveTab();
+  if (!tab?.id || !tab.url || !/^https?:\/\/(chatgpt\.com|chat\.openai\.com)\//.test(tab.url)) {
+    return false;
+  }
+  try {
+    await browser.tabs.reload(tab.id);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Send a typed request to the content script in the active tab. Never throws —
  * connectivity problems (wrong page, content script not injected yet) come back
  * as a `{ kind: 'error' }` response so the UI can show a friendly message.

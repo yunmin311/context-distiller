@@ -54,7 +54,9 @@ export type ErrorCode =
   | 'err.fillFailed'
   | 'err.unknownRequest'
   | 'err.scrollNotFound'
-  | 'err.scrollWhileGenerating';
+  | 'err.scrollWhileGenerating'
+  | 'err.focusChatgptTab'
+  | 'err.reloadNoMessages';
 
 export type PanelResponse =
   | { kind: 'pong'; platform: string }

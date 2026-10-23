@@ -21,7 +21,7 @@ import { createId } from '../../lib/utils/id';
 import { conversationKey } from '../../lib/utils/conversation-key';
 import { readGate, sameMessages } from '../../lib/utils/read-governor';
 import type { PastedTurn } from '../../lib/utils/paste-split';
-import { sendToActiveTab } from './messaging';
+import { reloadActiveTab, sendToActiveTab } from './messaging';
 import { loadPrefs, savePrefs, type Prefs } from './prefs';
 import { loadSession, saveSession, clearSession, type SessionSnapshot } from './session';
 
@@ -776,22 +776,32 @@ export function useDistiller() {
   );
 
   /**
-   * "重试" WITHOUT touching the user's tab: quiet in-place attempts with a
-   * short backoff. v1.3 reloaded the ChatGPT tab for the user and polled it up
-   * to 30 times — hostile when they were mid-something in that tab. Self-heal
-   * already re-injects an orphaned content script transparently; anything
-   * deeper (stale page, logged out) needs a human at the keyboard anyway, and
-   * the error screen says so. Early attempts are DOM-only (instant once the
-   * page has anything mounted); the final attempt may hit the backend.
+   * "重试" = reload the page for the user, then poll until the fresh content
+   * script answers. RESTORED in 1.4.1 on user verdict: the dominant real
+   * failure is a long-lived ChatGPT tab whose client state went stale — a
+   * fresh page load fixes it every time, in-place re-reads never did. (The
+   * v1.4 in-place-only retry was reverted; the 45s request ceiling added in
+   * v1.4 stays, so a hung poll can no longer wedge the panel.)
    */
   const retryRead = useCallback(
     async (): Promise<{ ok: boolean; count: number; partial: boolean }> => {
       dispatch({ type: 'load-start' });
-      for (let attempt = 0; attempt < 3; attempt += 1) {
-        if (attempt > 0) await delay(800 * attempt);
+      const reloaded = await reloadActiveTab();
+      if (!reloaded) {
+        dispatch({
+          type: 'load-error',
+          error: '请先切换到并聚焦 ChatGPT 对话标签页（chatgpt.com），再点重试。',
+          code: 'err.focusChatgptTab',
+        });
+        return { ok: false, count: 0, partial: false };
+      }
+      // Fresh page: content script re-injects at document_idle, then ChatGPT
+      // renders — poll until it answers (each poll is ceiling-protected).
+      for (let attempt = 0; attempt < 20; attempt += 1) {
+        await delay(700);
         const res = await sendToActiveTab({
           kind: 'get-conversation',
-          domOnly: attempt < 2,
+          domOnly: attempt < 12,
         });
         if (res.kind === 'conversation' && res.ok) {
           dispatch({
@@ -804,7 +814,11 @@ export function useDistiller() {
           return { ok: true, count: res.messages.length, partial: res.partial };
         }
       }
-      dispatch({ type: 'load-error', error: '未读取到消息。', code: 'err.noMessages' });
+      dispatch({
+        type: 'load-error',
+        error: '刷新后仍未读取到消息，请确认页面已打开一个对话后再重试。',
+        code: 'err.reloadNoMessages',
+      });
       return { ok: false, count: 0, partial: false };
     },
     [],

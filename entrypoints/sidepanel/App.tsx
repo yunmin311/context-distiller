@@ -358,14 +358,14 @@ export function App() {
     [actions, t],
   );
 
-  // "重试" reads again in place — it NEVER reloads the user's tab anymore
-  // (v1.3 did, and could wipe whatever they were mid-doing in it).
+  // "重试" reloads the page for the user and reads again (restored in 1.4.1 —
+  // empirically the only thing that fixes a stale long-lived ChatGPT tab).
   const handleRetry = useCallback(async () => {
     forceSnapRef.current = true; // an explicit retry lands on the latest
     const res = await actions.retryRead();
     if (res.ok) {
       setToast({
-        text: t(res.partial ? 'toast.readPartial' : 'toast.read', { count: res.count }),
+        text: t(res.partial ? 'toast.reloadedPartial' : 'toast.reloaded', { count: res.count }),
         tone: 'ok',
       });
     }

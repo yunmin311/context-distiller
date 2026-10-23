@@ -59,7 +59,7 @@ const zh = {
   'import.detected': '检测到 {count} 个前缀',
   'status.loading': '正在读取当前对话…',
   'status.errorTitle': '读取失败',
-  'status.retry': '重试',
+  'status.retry': '刷新页面并重试',
 
   // --- section headers ----------------------------------------------------
   'section.messages': '对话消息',
@@ -80,6 +80,8 @@ const zh = {
   'toast.read': '已读取 {count} 条消息',
   'toast.readPartial': '已读取 {count} 条 · 超长对话可向上滚动加载后再刷新',
   'toast.imported': '已导入 {count} 条消息',
+  'toast.reloaded': '已刷新页面并读取 {count} 条消息',
+  'toast.reloadedPartial': '已刷新并读取 {count} 条 · 超长对话可向上滚动加载后再刷新',
   'toast.added': '已加入到「{group}」',
   'toast.addedPair': '已加入问答到「{group}」',
   'toast.addedSelection': '已加入选中到「{group}」',
@@ -107,6 +109,8 @@ const zh = {
   'err.scrollWhileGenerating': '正在生成回答，视图会一直钉在底部；等输出结束后再定位。',
   'err.scrollGeneric': '未能跳转。',
   'err.scrollNoPage': '未能跳转，请确认 ChatGPT 对话页在前台。',
+  'err.focusChatgptTab': '请先切换到并聚焦 ChatGPT 对话标签页（chatgpt.com），再点重试。',
+  'err.reloadNoMessages': '刷新后仍未读取到消息，请确认页面已打开一个对话后再重试。',
   // --- message list -------------------------------------------------------
   'role.user': '你',
   'role.assistant': 'AI',
@@ -242,7 +246,7 @@ const en: Record<UIKey, string> = {
   'import.detected': '{count} prefixed lines detected',
   'status.loading': 'Reading this conversation…',
   'status.errorTitle': "Couldn't read the conversation",
-  'status.retry': 'Retry',
+  'status.retry': 'Reload the page and retry',
 
   // --- section headers ----------------------------------------------------
   'section.messages': 'Messages',
@@ -263,6 +267,9 @@ const en: Record<UIKey, string> = {
   'toast.read': 'Read {count} messages',
   'toast.readPartial': 'Read {count} · scroll up in ChatGPT to load more, then refresh',
   'toast.imported': 'Imported {count} messages',
+  'toast.reloaded': 'Reloaded the page and read {count} messages',
+  'toast.reloadedPartial':
+    'Reloaded and read {count} · scroll up in ChatGPT to load more, then refresh',
   'toast.added': 'Added to “{group}”',
   'toast.addedPair': 'Added the Q&A pair to “{group}”',
   'toast.addedSelection': 'Added the highlight to “{group}”',
@@ -293,6 +300,9 @@ const en: Record<UIKey, string> = {
     'Still generating — the view stays pinned to the bottom. Locate the message after the answer finishes.',
   'err.scrollGeneric': 'Could not jump to it.',
   'err.scrollNoPage': 'Could not jump — make sure the ChatGPT conversation tab is in front.',
+  'err.focusChatgptTab': 'Switch to and focus the ChatGPT tab (chatgpt.com) first, then retry.',
+  'err.reloadNoMessages':
+    'Still no messages after the reload — make sure a conversation is open, then retry.',
 
   // --- message list -------------------------------------------------------
   'role.user': 'You',
