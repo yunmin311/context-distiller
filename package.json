@@ -14,6 +14,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
+    "smoke": "node scripts/cdp-smoke.mjs .output/chrome-mv3",
     "postinstall": "wxt prepare"
   },
   "devDependencies": {
