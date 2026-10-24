@@ -202,28 +202,64 @@ if (LOGIN_MODE) {
     process.exit(1);
   }
   const profile = PROFILE_DIR;
-  const login = spawn(
-    candidates[0],
-    [
-      `--user-data-dir=${profile}`,
-      '--no-first-run',
-      '--no-default-browser-check',
-      `--load-extension=${extensionDir}`,
-      '--window-size=900,940',
-      'https://chatgpt.com/',
-    ],
-    { stdio: 'ignore', detached: false },
-  );
+  const loginArgs = (port) => [
+    `--user-data-dir=${profile}`,
+    '--no-first-run',
+    '--no-default-browser-check',
+    `--load-extension=${extensionDir}`,
+    `--remote-debugging-port=${port}`,
+    '--window-size=900,940',
+    'https://chatgpt.com/',
+  ];
+  // Windowed launches are flaky about binding the debug port (attach-to-
+  // existing quirks) — verify the endpoint, retry up to 3 times on failure.
+  let login = null;
+  for (let attempt = 0; attempt < 3 && !login; attempt += 1) {
+    const port = 9300 + Math.floor(Math.random() * 400);
+    console.log(`SMOKE: launching login browser (attempt ${attempt + 1}, port ${port})`);
+    login = spawn(candidates[0], loginArgs(port), { stdio: 'ignore', detached: false });
+    let portUp = false;
+    for (let i = 0; i < 15; i += 1) {
+      await sleep(1000);
+      try {
+        await (await fetch(`http://127.0.0.1:${port}/json/version`)).json();
+        portUp = true;
+        break;
+      } catch {}
+    }
+    if (portUp) {
+      process.env.CDP_SMOKE_PORT = String(port);
+      break;
+    }
+    console.log('SMOKE: debug port did not come up — relaunching');
+    try {
+      process.kill(-login.pid);
+    } catch {
+      try {
+        login.kill();
+      } catch {}
+    }
+    login = null;
+  }
+  if (!login) {
+    console.error('SMOKE: could not start a login browser with a working debug port');
+    process.exit(1);
+  }
+  const BASEL = `http://127.0.0.1:${process.env.CDP_SMOKE_PORT}`;
   console.log('SMOKE: LOGIN MODE — a browser window is open at chatgpt.com.');
   const waitMin = Number(process.env.CDP_SMOKE_LOGIN_WAIT_MIN ?? 5);
   console.log(`SMOKE: log in by hand; polling ${waitMin} min ceiling.`);
   let ready = false;
+  let lastState = '';
   for (let i = 0; i < (waitMin * 60) / 3; i += 1) {
     await sleep(3000);
     try {
-      const list = await (await fetch(`${BASE}/json/list`)).json();
+      const list = await (await fetch(`${BASEL}/json/list`)).json();
       const page = list.find((t) => t.type === 'page' && /chatgpt\.com/.test(t.url));
-      if (!page) continue;
+      if (!page) {
+        if (i === 5) console.log('SMOKE: no chatgpt.com page target yet…');
+        continue;
+      }
       const c = await connect(page.webSocketDebuggerUrl);
       const state = await evalIn(
         c,
@@ -232,12 +268,18 @@ if (LOGIN_MODE) {
            url: location.href.slice(0, 60) }))()`,
       );
       c.close();
+      const sig = `${state.nav}|${state.loginBtn}|${state.url}`;
+      if (sig !== lastState) {
+        console.log(`SMOKE: login page state: ${sig}`);
+        lastState = sig;
+      }
       if (state.nav) {
         ready = true;
         break;
       }
-      if (i === 30) console.log(`SMOKE: still waiting (login page: ${state.url})`);
-    } catch {}
+    } catch (e) {
+      if (i % 10 === 0) console.log(`SMOKE: poll error (will retry): ${e.message}`);
+    }
   }
   try {
     process.kill(-login.pid);
