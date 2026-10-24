@@ -215,9 +215,10 @@ if (LOGIN_MODE) {
     { stdio: 'ignore', detached: false },
   );
   console.log('SMOKE: LOGIN MODE — a browser window is open at chatgpt.com.');
-  console.log('SMOKE: log in by hand; this script polls for the session (5 min ceiling).');
+  const waitMin = Number(process.env.CDP_SMOKE_LOGIN_WAIT_MIN ?? 5);
+  console.log(`SMOKE: log in by hand; polling ${waitMin} min ceiling.`);
   let ready = false;
-  for (let i = 0; i < 100; i += 1) {
+  for (let i = 0; i < (waitMin * 60) / 3; i += 1) {
     await sleep(3000);
     try {
       const list = await (await fetch(`${BASE}/json/list`)).json();
@@ -462,6 +463,7 @@ try {
         );
         let readOk = false;
         let lastMid = '';
+        const readStart = Date.now();
         for (let i = 0; i < 90; i += 1) {
           await sleep(1000);
           const st = await evalIn(
@@ -483,7 +485,39 @@ try {
             break;
           }
         }
-        check('logged-in read lands messages', readOk, `count>0 via topbar force load`);
+        check(
+          'logged-in read lands messages',
+          readOk,
+          `${((Date.now() - readStart) / 1000).toFixed(1)}s to first rows via topbar force load`,
+        );
+        if (readOk) {
+          // The user-experienced "read complete" = first rows UNTIL the count
+          // stops growing (partial→full upgrade, cache, gating all included).
+          let stable = 0;
+          let prev = 1;
+          const settleStart = Date.now();
+          for (let i = 0; i < 60; i += 1) {
+            await sleep(1000);
+            const n = await evalIn(
+              cdp,
+              `(() => { return [...document.querySelectorAll('.msg[data-mid]')]
+                  .filter((r) => !r.dataset.mid.startsWith('paste_')).length; })()`,
+            );
+            if (n === prev) {
+              stable += 1;
+              if (stable >= 4) break;
+            } else {
+              stable = 0;
+              prev = n;
+            }
+          }
+          console.log(
+            `SMOKE: TIMING — read settled at ${prev} msgs, total ${(
+              (Date.now() - readStart) / 1000
+            ).toFixed(1)}s from click to stable`,
+          );
+          void settleStart;
+        }
         if (readOk && lastMid) {
           // Locate: click the LAST row's number (it is mounted), then the page
           // must actually have that message in its DOM within the seek budget.
