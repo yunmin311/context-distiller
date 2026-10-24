@@ -89,9 +89,10 @@ const MessageRow = memo(function MessageRow({
   const t = useT();
   const isLong = readable.length > CLAMP_CHARS;
   const shown = isLong && !open ? readable.slice(0, CLAMP_CHARS).trimEnd() + '…' : readable;
-  // Paste-imported rows have no page counterpart to scroll to — their number
-  // is inert (the crosshair/locate affordance only exists for read messages).
+  // Rows with no page counterpart: paste imports, and normalizer-synthetic ids
+  // (msg_<n>) from the SSR-fallback read — their number is inert.
   const isPasted = message.id.startsWith('paste_');
+  const noAnchor = isPasted || /^msg_\d+$/.test(message.id);
 
   // Local draft for the mark note so typing doesn't dispatch on every keystroke
   // (commit on blur / Enter). Resync if the note changes from outside (restore).
@@ -112,8 +113,11 @@ const MessageRow = memo(function MessageRow({
     >
       <header className="msg-head">
         <span className={`tag tag-${message.role}`}>{roleLabel(message.role, t)}</span>
-        {isPasted ? (
-          <span className="msg-num msg-num-static" title={t('msg.pastedNoLocate')}>
+        {noAnchor ? (
+          <span
+            className="msg-num msg-num-static"
+            title={t(isPasted ? 'msg.pastedNoLocate' : 'msg.ssrNoLocate')}
+          >
             #{message.order + 1}
           </span>
         ) : (

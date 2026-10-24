@@ -38,6 +38,22 @@ describe('splitPastedConversation', () => {
     ]);
   });
 
+  it('parses ChatGPT SSR-fallback style prefixes (你说：/ChatGPT 说：)', () => {
+    const turns = splitPastedConversation('你说：1\nChatGPT 说：What does “1” refer to?');
+    expect(turns).toEqual([
+      { role: 'user', text: '1' },
+      { role: 'assistant', text: 'What does “1” refer to?' },
+    ]);
+  });
+
+  it('parses AI说-style prefixes too', () => {
+    const turns = splitPastedConversation('用户说：问题\nAI说：答案');
+    expect(turns).toEqual([
+      { role: 'user', text: '问题' },
+      { role: 'assistant', text: '答案' },
+    ]);
+  });
+
   it('uses the fallback role for a leading unprefixed block', () => {
     const turns = splitPastedConversation('开场白没有前缀\n你：问题', 'assistant');
     expect(turns).toEqual([

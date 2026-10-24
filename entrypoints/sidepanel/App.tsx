@@ -333,10 +333,15 @@ export function App() {
               ? { force: true, bypassCache: true }
               : undefined,
         );
-        // Slow page: retry QUIETLY with a growing backoff — up to ~30s. Early
-        // retries are DOM-only (instant once the page has anything mounted);
-        // only the final attempt may surface an error.
-        const BACKOFF = [400, 700, 1200, 1800, 2500, 3500, 4000, 5000, 6500, 8000];
+        // Slow page: retry QUIETLY. AUTO/switch reads (domFirst) use a TIGHT
+        // early-retry ladder (~5s total): ChatGPT renders within 2–5s, and every
+        // second the pipeline holds loadingRef is a second the user's clicks are
+        // swallowed — the 33s ladder was measured (E2E) to eat ~35s after every
+        // conversation switch. Manual reads keep the patient ladder; their last
+        // attempt may surface an error.
+        const BACKOFF = domFirst
+          ? [300, 400, 500, 700, 900, 1200, 1500]
+          : [400, 700, 1200, 1800, 2500, 3500, 4000, 5000, 6500, 8000];
         for (let attempt = 0; !res.ok && attempt < BACKOFF.length; attempt += 1) {
           await new Promise<void>((r) => setTimeout(r, BACKOFF[attempt]));
           const last = attempt === BACKOFF.length - 1;

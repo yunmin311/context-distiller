@@ -76,6 +76,10 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function launchWith(browserPath) {
   const profile = PERSIST ? PROFILE_DIR : mkdtempSync(join(tmpdir(), 'cd-smoke-'));
+  // PERSIST runs WINDOWED on purpose: Cloudflare challenges headless
+  // fingerprints ("请稍候…" interstitial), which would break the logged-in
+  // suite. The anonymous tier stays headless (no login to protect).
+  const headless = PERSIST ? [] : ['--headless=new'];
   const child = spawn(
     browserPath,
     [
@@ -85,12 +89,8 @@ async function launchWith(browserPath) {
       '--disable-crash-reporter',
       `--load-extension=${extensionDir}`,
       `--remote-debugging-port=${PORT}`,
-      // Headless: a windowed launch can attach to an EXISTING browser session
-      // ("正在现有浏览器会话中打开"), which leaves OUR debug port dead — the
-      // exact failure that made this script flaky. headless=new always starts
-      // its own session. Extensions DO load in headless=new (verified on Edge).
-      '--headless=new',
-      '--window-size=560,940',
+      ...headless,
+      '--window-size=900,940',
       'about:blank',
     ],
     { stdio: ['ignore', 'ignore', 'pipe'], detached: false },
@@ -304,14 +304,19 @@ if (ATTACH_ONLY) {
   id = new URL(sw.url).host;
   console.log(`SMOKE: attached, extension id = ${id}`);
 } else {
+// Windowed launches sometimes fail to bind the debug port (attach quirks) —
+// give every candidate two attempts before moving on.
 for (const p of candidates) {
-  console.log(`SMOKE: trying ${p}`);
-  launched = await launchWith(p);
-  if (launched) {
-    browserPathUsed = p;
-    break;
+  for (let attempt = 1; attempt <= 2 && !launched; attempt += 1) {
+    console.log(`SMOKE: trying ${p} (attempt ${attempt})`);
+    launched = await launchWith(p);
+    if (launched) {
+      browserPathUsed = p;
+      break;
+    }
+    console.log(`SMOKE: ${p} attempt ${attempt} did not load the extension`);
   }
-  console.log(`SMOKE: ${p} did not load the extension (flag ignored?), trying next`);
+  if (launched) break;
 }
 if (!launched) {
   console.error('SMOKE: FAIL — no candidate loaded the extension');
@@ -320,6 +325,7 @@ if (!launched) {
 ({ child, id } = launched);
 }
 const failures = [];
+const skipped = [];
 const check = (name, ok, detail = '') => {
   console.log(`SMOKE: ${ok ? 'PASS' : 'FAIL'} — ${name}${detail ? ` (${detail})` : ''}`);
   if (!ok) failures.push(name);
@@ -384,57 +390,63 @@ try {
   check(`panel shows v${expectedVersion}`, boot.version === true, boot.text.slice(0, 60));
   check('intro with 读取 button visible', boot.intro === true);
 
-  // 2. Open a real chatgpt.com tab (becomes the ACTIVE tab), then click 读取
-  //    in the panel: full three-hop against the logged-out landing page.
-  await fetch(`${BASE}/json/new?https://chatgpt.com/`, { method: 'PUT' });
-  await sleep(6000); // let the page + content script settle
+  // 2. Anonymous tier: open chatgpt.com and click 读取 — a logged-OUT profile
+  //    fails the read and must surface a structured error card. In PERSIST
+  //    mode the user is logged in, so reads SUCCEED — these assertions would
+  //    be wrong there; the logged-in suite covers the success path instead.
+  if (!PERSIST) {
+    await fetch(`${BASE}/json/new?https://chatgpt.com/`, { method: 'PUT' });
+    await sleep(6000); // let the page + content script settle
 
-  const clickAndAwait = await evalIn(
-    cdp,
-    `(async () => {
-      document.querySelector('.intro-actions .btn-primary')?.click();
-      // The read pipeline retries quietly for ~35s before surfacing the error
-      // card — the assertion window must outlast that by a wide margin.
-      for (let i = 0; i < 180; i++) {
-        await new Promise((r) => setTimeout(r, 500));
-        const card = document.querySelector('.notice-error');
-        if (card) return card.innerText;
-      }
-      return 'TIMEOUT: no error card within 90s';
-    })()`,
-  );
-  const readOk =
-    typeof clickAndAwait === 'string' &&
-    clickAndAwait.includes('读取失败') &&
-    (clickAndAwait.includes('诊断：页面消息节点') ||
-      clickAndAwait.includes('还没有消息的新对话') ||
-      clickAndAwait.includes('无法与页面通信'));
-  check(
-    'read click → structured error card (channel alive, no hang)',
-    readOk,
-    String(clickAndAwait).slice(0, 160),
-  );
+    const clickAndAwait = await evalIn(
+      cdp,
+      `(async () => {
+        document.querySelector('.intro-actions .btn-primary')?.click();
+        // The read pipeline retries quietly for ~35s before surfacing the error
+        // card — the assertion window must outlast that by a wide margin.
+        for (let i = 0; i < 180; i++) {
+          await new Promise((r) => setTimeout(r, 500));
+          const card = document.querySelector('.notice-error');
+          if (card) return card.innerText;
+        }
+        return 'TIMEOUT: no error card within 90s';
+      })()`,
+    );
+    const readOk =
+      typeof clickAndAwait === 'string' &&
+      clickAndAwait.includes('读取失败') &&
+      (clickAndAwait.includes('诊断：页面消息节点') ||
+        clickAndAwait.includes('还没有消息的新对话') ||
+        clickAndAwait.includes('无法与页面通信'));
+    check(
+      'read click → structured error card (channel alive, no hang)',
+      readOk,
+      String(clickAndAwait).slice(0, 160),
+    );
 
-  // INFO (non-fatal): the retry button = reload-retry. Anonymous headless runs
-  // usually stay bot-walled (noContentScript), but the panel must stay alive
-  // and show a structured card afterwards either way.
-  const retryAndAwait = await evalIn(
-    cdp,
-    `(async () => {
-      document.querySelector('.notice-error .btn')?.click();
-      for (let i = 0; i < 150; i++) {
-        await new Promise((r) => setTimeout(r, 500));
-        const card = document.querySelector('.notice-error');
-        if (card) return card.innerText;
-      }
-      return 'TIMEOUT';
-    })()`,
-  );
-  console.log(
-    `SMOKE: INFO — reload-retry card: ${String(retryAndAwait).slice(0, 140).replace(/\n/g, ' | ')}`,
-  );
-  const aliveAfterRetry = await evalIn(cdp, `document.body.innerText.length > 0`);
-  check('panel responsive after reload-retry', aliveAfterRetry === true);
+    // INFO (non-fatal): the retry button = reload-retry. Anonymous headless runs
+    // usually stay bot-walled (noContentScript), but the panel must stay alive
+    // and show a structured card afterwards either way.
+    const retryAndAwait = await evalIn(
+      cdp,
+      `(async () => {
+        document.querySelector('.notice-error .btn')?.click();
+        for (let i = 0; i < 150; i++) {
+          await new Promise((r) => setTimeout(r, 500));
+          const card = document.querySelector('.notice-error');
+          if (card) return card.innerText;
+        }
+        return 'TIMEOUT';
+      })()`,
+    );
+    console.log(
+      `SMOKE: INFO — reload-retry card: ${String(retryAndAwait).slice(0, 140).replace(/\n/g, ' | ')}`,
+    );
+    const aliveAfterRetry = await evalIn(cdp, `document.body.innerText.length > 0`);
+    check('panel responsive after reload-retry', aliveAfterRetry === true);
+  } else {
+    skipped.push('read-failure card suite (logged-in: reads succeed — success path covered below)');
+  }
 
   // ---- Paste-import E2E (deterministic, works logged-out) --------------------
   // Top bar 导入/Import → textarea → 按前缀拆分 → 加入 → two paste_ rows + count.
@@ -478,7 +490,6 @@ try {
   check('compile pipeline alive after import', compiled.matched === true, String(compiled.text).slice(0, 60).replace(/\n/g, ' | '));
 
   // ---- Logged-in suite (persistent profile only) ------------------------------
-  const skipped = [];
   if (!PERSIST) {
     skipped.push('logged-in E2E (no .smoke-profile — run `pnpm smoke:login <ver>` once)');
   } else {
@@ -492,12 +503,41 @@ try {
       skipped.push('logged-in E2E (no chatgpt.com tab)');
     } else {
       const chat = await connect(chatTab.webSocketDebuggerUrl);
-      const loggedIn = await evalIn(chat, `(() => ({ nav: !!document.querySelector('nav a[href*="/c/"]') }))()`);
-      if (!loggedIn.nav) {
+      // Login check via the SAME endpoint the extension uses. Cloudflare may
+      // interstitial a fresh window for a few seconds — poll through it.
+      let token = false;
+      for (let i = 0; i < 10 && !token; i += 1) {
+        await sleep(3000);
+        token = await evalIn(
+          chat,
+          `(async () => { try { const j = await (await fetch('/api/auth/session')).json();
+               return !!j.accessToken; } catch { return false; } })()`,
+        );
+      }
+      if (!token) {
         skipped.push('logged-in E2E (profile not logged in — run `pnpm smoke:login <ver>`)');
       } else {
-        await evalIn(chat, `document.querySelector('nav a[href*="/c/"]').click()`);
-        await sleep(7000);
+        // Pick the most recent conversation from the ACCOUNT's list (read-only
+        // GET, same call the extension makes) and navigate straight to it —
+        // no sidebar-DOM dependency.
+        const conv = await evalIn(
+          chat,
+          `(async () => { const r = await fetch('/backend-api/conversations?offset=0&limit=5&order=updated');
+             const j = await r.json().catch(() => ({}));
+             return { status: r.status,
+               id: j.items && j.items[0] ? j.items[0].id : '',
+               raw: JSON.stringify(j).slice(0, 160) }; })()`,
+        );
+        console.log(`SMOKE: conversations endpoint → ${conv.status} ${conv.raw}`);
+        // A profile whose account keeps history off lists nothing — allow an
+        // explicit conversation id via CDP_SMOKE_CONV.
+        conv.id = conv.id || process.env.CDP_SMOKE_CONV || '';
+        if (!conv.id) {
+          skipped.push('logged-in E2E (no conversations in the account list)');
+        } else {
+          console.log(`SMOKE: testing conversation ${conv.id.slice(0, 8)}…`);
+          await evalIn(chat, `location.href = '/c/${conv.id}'`);
+          await sleep(9000);
         // Force load via the top-right refresh — full backend read.
         await evalIn(
           cdp,
@@ -561,8 +601,18 @@ try {
           void settleStart;
         }
         if (readOk && lastMid) {
-          // Locate: click the LAST row's number (it is mounted), then the page
-          // must actually have that message in its DOM within the seek budget.
+          // Locate needs page-side anchors. In the non-hydrated shell (the
+          // automation norm) ChatGPT renders no data-message-id nodes at all —
+          // the extension correctly hides locate for those rows.
+          const pageAnchors = await evalIn(
+            chat,
+            `document.querySelectorAll('[data-message-id]').length`,
+          );
+          if (pageAnchors === 0) {
+            skipped.push('locate E2E (page shell not hydrated — no data-message-id anchors)');
+          } else {
+            // Locate: click the LAST row's number (it is mounted), then the page
+            // must actually have that message in its DOM within the seek budget.
           await evalIn(
             cdp,
             `(() => { const rows = [...document.querySelectorAll('.msg[data-mid]')]
@@ -581,8 +631,29 @@ try {
               break;
             }
           }
+          if (!located) {
+            // Diagnostics: what does the PAGE actually have vs the PANEL rows?
+            const diag = await evalIn(
+              chat,
+              `(() => { const ids = [...document.querySelectorAll('[data-message-id]')]
+                   .map((n) => n.getAttribute('data-message-id'));
+                 return { count: ids.length, first: ids[0] ?? '', last: ids[ids.length - 1] ?? '',
+                   url: location.pathname.slice(0, 50) }; })()`,
+            );
+            const panelDiag = await evalIn(
+              cdp,
+              `(() => { const rows = [...document.querySelectorAll('.msg[data-mid]')];
+                 return { count: rows.length,
+                   mids: rows.slice(-3).map((r) => r.dataset.mid.slice(0, 12)).join(',') }; })()`,
+            );
+            console.log(
+              `SMOKE: DIAG locate-miss — page: ${JSON.stringify(diag)} | panel: ${JSON.stringify(panelDiag)} | sought: ${lastMid.slice(0, 12)}…`,
+            );
+          }
           check('locate scrolls the page to the message', located, `mid=${lastMid.slice(0, 12)}…`);
+          }
         }
+      }
       }
       chat.close();
     }

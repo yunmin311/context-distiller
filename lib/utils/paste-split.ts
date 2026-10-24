@@ -18,8 +18,12 @@ export interface PastedTurn {
   text: string;
 }
 
-const USER_PREFIX_RE = /^\s*(?:你|我|用户|人类|user|human)\s*[:：]\s?/i;
-const ASSISTANT_PREFIX_RE = /^\s*(?:ai|chatgpt|gpt|claude|gemini|assistant|bot|机器人)\s*[:：]\s?/i;
+// Speaker prefixes. The optional 说 covers ChatGPT's own SSR fallback rendering
+// ("你说：…" / "ChatGPT 说：…") — the same grammar users paste, so one parser
+// serves both.
+const USER_PREFIX_RE = /^\s*(?:你|我|用户|人类|user|human)(?:\s*说)?\s*[:：]\s?/i;
+const ASSISTANT_PREFIX_RE =
+  /^\s*(?:ai|chatgpt|gpt|claude|gemini|assistant|bot|机器人)(?:\s*说)?\s*[:：]\s?/i;
 
 function roleOf(line: string): PasteRole | null {
   if (USER_PREFIX_RE.test(line)) return 'user';

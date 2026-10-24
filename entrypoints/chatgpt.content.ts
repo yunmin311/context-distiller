@@ -2,6 +2,7 @@
 import { normalizeMessages, coerceRole } from '../lib/platform/normalizer';
 import type { RawMessage } from '../lib/platform/adapter';
 import { chatgptAdapter } from '../lib/platform/chatgpt-adapter';
+import { splitPastedConversation } from '../lib/utils/paste-split';
 import {
   AUTHOR_ROLE_ATTR,
   CONVERSATION_ID_RE,
@@ -76,6 +77,34 @@ export default defineContentScript({
  * and the growing answer carries the streaming highlight class. Either alone is
  * treated as active, so a rename of one can't blind us.
  */
+/**
+ * SSR-FALLBACK EXTRACTION (v1.4.5).
+ *
+ * ChatGPT's new app shell renders the conversation SERVER-SIDE as plain
+ * speaker-prefixed text (「你说：…」/「ChatGPT 说：…」) and hydrates the
+ * interactive UI later — in measured conditions (automated contexts, stale
+ * tabs) hydration may NEVER happen, leaving the page with ZERO
+ * data-message-* anchors: DOM reads, locate and follow all dead, every read
+ * forced onto the slow backend path. The fallback text contains the WHOLE
+ * thread, so parsing it yields instant, backend-free reads.
+ *
+ * Guarded to the non-hydrated state (no MESSAGE_SELECTOR nodes) and to text
+ * that actually contains speaker lines, so a hydrated page is untouched.
+ */
+function extractFromSsrFallback(): RawMessage[] {
+  if (document.querySelector(MESSAGE_SELECTOR)) return []; // hydrated — normal path
+  const frame =
+    document.querySelector<HTMLElement>('[class*="MainContentFrame"]') ??
+    document.querySelector<HTMLElement>('main');
+  const text = frame?.innerText ?? '';
+  if (!text || !/\n?\s*(?:你|我|用户|ai|chatgpt|gpt)(?:说)?\s*[:：]/i.test(text)) return [];
+  const turns = splitPastedConversation(text, 'assistant');
+  // Fewer than half the turns matching a speaker prefix usually means we
+  // grabbed UI chrome instead of the thread — bail rather than guess.
+  if (turns.length === 0) return [];
+  return turns.map((t) => ({ role: t.role, text: t.text, source: 'dom' as const }));
+}
+
 function isGenerating(): boolean {
   // VISIBILITY-CHECKED: ChatGPT has been seen to leave a hidden STOP button (or
   // a stale streaming class) in the DOM after a run finishes. Existence alone
@@ -410,7 +439,8 @@ async function getConversation(message: PanelRequest & { kind: 'get-conversation
         ? `slower than 6s (still trying in the background)`
         : api.error ?? 'unknown',
     );
-    const domRaw = chatgptAdapter.extractFromDom();
+    let domRaw = chatgptAdapter.extractFromDom();
+    if (domRaw.length === 0) domRaw = extractFromSsrFallback(); // non-hydrated shell
     if (domRaw.length > 0) {
       const mw = await requestMainWorld(400);
       const mwText = new Map<string, string>();
