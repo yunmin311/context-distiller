@@ -8,7 +8,7 @@
 
 ## 0. 项目一句话
 
-Chrome MV3 侧边栏扩展（WXT + React 19 + TS），读取当前 ChatGPT 对话 → 多粒度选材 → 确定性编译成一段纯文本 Prompt → 复制/回填。**不调模型、不存服务器、不自动发送。**当前版本 **1.4.3**，远端 `yunmin311/context-distiller`（main 已同步，tag v1.4.3）。
+Chrome MV3 侧边栏扩展（WXT + React 19 + TS），读取当前 ChatGPT 对话 → 多粒度选材 → 确定性编译成一段纯文本 Prompt → 复制/回填。**不调模型、不存服务器、不自动发送。**当前版本 **1.4.4**，远端 `yunmin311/context-distiller`（main 已同步；v1.4.0–v1.4.4 tag 均在远端，v1.4.3 指向发布提交 d9fdd00）。
 
 ## 1. 用户实证铁律（违反 = 复现已知事故）
 
@@ -65,10 +65,13 @@ Chrome MV3 侧边栏扩展（WXT + React 19 + TS），读取当前 ChatGPT 对�
 
 ```bash
 pnpm typecheck && pnpm test && pnpm build     # 80 个单测；全绿才继续
-node scripts/cdp-smoke.mjs .output/chrome-mv3 <版本号>   # 真实浏览器冒烟，RESULT PASS 才交付
+pnpm smoke <版本号>                            # = node scripts/cdp-smoke.mjs .output/chrome-mv3 <版本号>
+                                              # 真实浏览器冒烟，RESULT PASS 才交付
 ```
 
 冒烟脚本做的事：临时干净配置真实加载扩展 → 打开 sidepanel.html → 断言版本号/首屏 → 打开真实 chatgpt.com → 点击读取 → 断言结构化错误卡片（通道活着、无挂起）→ 点重试 → 断言面板仍响应。
+
+**运行环境注记**：脚本按 Windows + Git Bash 编写（浏览器路径探测用 cmd.exe、进程清理用 taskkill、Edge/Chrome 安装路径为 Windows 形式）。在 WSL 下不能直接运行——要么从 Windows 侧执行，要么先把路径/进程管理改为 WSL 约定（此前 Codex 只读核对指出过这点）。CI 机房跑不了它（无浏览器），CI 只跑三关。
 
 **冒烟测试已知边界（不是失败）**：
 - 无头/匿名环境被 Cloudflare 拦 → 错误卡片显示「无法与页面通信/与页面的连接：无响应」= **正确行为**，断言接受它。

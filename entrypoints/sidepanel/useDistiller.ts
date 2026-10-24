@@ -737,15 +737,24 @@ export function useDistiller() {
       // READ GATE: every BACKEND read shares the user's ChatGPT rate-limit
       // budget with the page itself. v1.4.0 REFUSED reads inside the gap —
       // which silently dropped the partial→full upgrade and left users staring
-      // at a half-read list. Since v1.4.2 the gate DEFERS: background reads
-      // wait (bounded) for the gap, foreground reads only wait out an in-flight
-      // one. domOnly reads are pure DOM — never gated.
+      // at a half-read list. Since v1.4.2 the gate DEFERS; since v1.4.4 a
+      // DEFER TIMEOUT is retried for background reads (3 acquire attempts with
+      // breathing room) — a timeout must never silently DROP the upgrade /
+      // catch-up / full-ready read, only bounded exhaustion may. Foreground
+      // reads surface the skip to the caller (user can re-click).
       const backend = opts?.domOnly !== true;
       if (backend) {
-        const admitted = await readGate.acquire({
+        const maxWaitMs = opts?.background === true ? 25_000 : 6_000;
+        let admitted = await readGate.acquire({
           force: opts?.force === true,
-          maxWaitMs: opts?.background === true ? 25_000 : 6_000,
+          maxWaitMs,
         });
+        if (!admitted && opts?.background === true) {
+          for (let requeue = 0; requeue < 2 && !admitted; requeue += 1) {
+            await delay(4_000);
+            admitted = await readGate.acquire({ force: opts?.force === true, maxWaitMs });
+          }
+        }
         if (!admitted) {
           return { ok: false, count: 0, partial: false, skipped: true };
         }

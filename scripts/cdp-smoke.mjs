@@ -16,12 +16,23 @@
 import { spawn, execSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 
-const extensionDir = process.argv[2];
-const expectedVersion = process.argv[3] ?? '1.4.1';
-if (!extensionDir) {
-  console.error('usage: node cdp-smoke.mjs <extensionDir> [expectedVersion]');
+// Usage:
+//   node cdp-smoke.mjs <extensionDir> <expectedVersion>   (explicit)
+//   node cdp-smoke.mjs <expectedVersion>                  (dir defaults to .output/chrome-mv3 — `pnpm smoke 1.4.4`)
+// A first arg starting with a digit is treated as the version, so
+// `pnpm smoke 1.4.4` works even though the npm script already pins the dir.
+const DEFAULT_DIR = '.output/chrome-mv3';
+const arg1 = process.argv[2];
+const arg2 = process.argv[3];
+const firstIsDir = arg1 && !/^\d/.test(arg1);
+// Edge/Chrome REJECT a relative --load-extension path (silently ignores it —
+// the exact failure that made this script flaky). Always resolve to absolute.
+const extensionDir = resolve(firstIsDir ? arg1 : DEFAULT_DIR);
+const expectedVersion = (firstIsDir ? arg2 : arg1) ?? '1.4.4';
+if (!extensionDir || !expectedVersion) {
+  console.error('usage: node cdp-smoke.mjs [extensionDir] <expectedVersion>');
   process.exit(2);
 }
 
@@ -62,6 +73,11 @@ async function launchWith(browserPath) {
       '--disable-crash-reporter',
       `--load-extension=${extensionDir}`,
       `--remote-debugging-port=${PORT}`,
+      // Headless: a windowed launch can attach to an EXISTING browser session
+      // ("正在现有浏览器会话中打开"), which leaves OUR debug port dead — the
+      // exact failure that made this script flaky. headless=new always starts
+      // its own session. Extensions DO load in headless=new (verified on Edge).
+      '--headless=new',
       '--window-size=560,940',
       'about:blank',
     ],
@@ -76,8 +92,8 @@ async function launchWith(browserPath) {
   // ours), and modern branded builds IGNORE --load-extension entirely — both
   // must be distinguished by reading each SW's manifest.
   const seenHosts = new Set();
-  for (let i = 0; i < 20; i += 1) {
-    await sleep(600);
+  for (let i = 0; i < 40; i += 1) {
+    await sleep(750);
     try {
       const list = await (await fetch(`${BASE}/json/list`)).json();
       const sws = list.filter(
