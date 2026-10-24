@@ -14,18 +14,30 @@
  * Exit 0 = all assertions passed.
  */
 import { spawn, execSync } from 'node:child_process';
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
 // Usage:
 //   node cdp-smoke.mjs <extensionDir> <expectedVersion>   (explicit)
 //   node cdp-smoke.mjs <expectedVersion>                  (dir defaults to .output/chrome-mv3 — `pnpm smoke 1.4.4`)
+//   node cdp-smoke.mjs --login <expectedVersion>          (one-time: open a windowed persistent
+//                                                          profile at chatgpt.com; log in by hand)
 // A first arg starting with a digit is treated as the version, so
 // `pnpm smoke 1.4.4` works even though the npm script already pins the dir.
+//
+// PROFILES: when `.smoke-profile/` exists next to the repo root it is reused
+// (persistent), which enables the LOGGED-IN suite — read success, partial→full
+// upgrade and locate against a real ChatGPT conversation. Without it, a
+// throwaway profile runs the anonymous suite only (structured failure cards).
+// The persistent profile holds the tester's ChatGPT session — it is
+// git-ignored and must NEVER be committed or copied anywhere.
 const DEFAULT_DIR = '.output/chrome-mv3';
-const arg1 = process.argv[2];
-const arg2 = process.argv[3];
+const PROFILE_DIR = resolve('.smoke-profile');
+const PERSIST = existsSync(PROFILE_DIR);
+const LOGIN_MODE = process.argv[2] === '--login';
+const arg1 = LOGIN_MODE ? process.argv[3] : process.argv[2];
+const arg2 = LOGIN_MODE ? process.argv[4] : process.argv[3];
 const firstIsDir = arg1 && !/^\d/.test(arg1);
 // Edge/Chrome REJECT a relative --load-extension path (silently ignores it —
 // the exact failure that made this script flaky). Always resolve to absolute.
@@ -63,7 +75,7 @@ if (candidates.length === 0) {
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function launchWith(browserPath) {
-  const profile = mkdtempSync(join(tmpdir(), 'cd-smoke-'));
+  const profile = PERSIST ? PROFILE_DIR : mkdtempSync(join(tmpdir(), 'cd-smoke-'));
   const child = spawn(
     browserPath,
     [
@@ -179,6 +191,64 @@ let launched = null;
 let browserPathUsed = ATTACH_ONLY ? '(attached to running instance)' : '';
 let id = '';
 let child = null;
+
+// ---- LOGIN MODE (--login): one-time setup for the persistent profile -------
+// Opens a WINDOWED browser on chatgpt.com so a human can log in by hand; polls
+// (5 min ceiling) for the logged-in signal, then exits. Never touches
+// credentials — the human does the login, the script only waits.
+if (LOGIN_MODE) {
+  if (!candidates.length) {
+    console.error('SMOKE: no Chromium-family browser found');
+    process.exit(1);
+  }
+  const profile = PROFILE_DIR;
+  const login = spawn(
+    candidates[0],
+    [
+      `--user-data-dir=${profile}`,
+      '--no-first-run',
+      '--no-default-browser-check',
+      `--load-extension=${extensionDir}`,
+      '--window-size=900,940',
+      'https://chatgpt.com/',
+    ],
+    { stdio: 'ignore', detached: false },
+  );
+  console.log('SMOKE: LOGIN MODE — a browser window is open at chatgpt.com.');
+  console.log('SMOKE: log in by hand; this script polls for the session (5 min ceiling).');
+  let ready = false;
+  for (let i = 0; i < 100; i += 1) {
+    await sleep(3000);
+    try {
+      const list = await (await fetch(`${BASE}/json/list`)).json();
+      const page = list.find((t) => t.type === 'page' && /chatgpt\.com/.test(t.url));
+      if (!page) continue;
+      const c = await connect(page.webSocketDebuggerUrl);
+      const state = await evalIn(
+        c,
+        `(() => ({ nav: !!document.querySelector('nav a[href*="/c/"]'),
+           loginBtn: !!document.querySelector('[data-testid="login-button"]'),
+           url: location.href.slice(0, 60) }))()`,
+      );
+      c.close();
+      if (state.nav) {
+        ready = true;
+        break;
+      }
+      if (i === 30) console.log(`SMOKE: still waiting (login page: ${state.url})`);
+    } catch {}
+  }
+  try {
+    process.kill(-login.pid);
+  } catch {
+    try {
+      login.kill();
+    } catch {}
+  }
+  console.log(ready ? 'SMOKE: LOGIN READY — persistent profile captured.' : 'SMOKE: LOGIN TIMED OUT');
+  process.exit(ready ? 0 : 1);
+}
+
 if (ATTACH_ONLY) {
   const list = await (await fetch(`${BASE}/json/list`)).json();
   const sw = list.find(
@@ -322,6 +392,126 @@ try {
   );
   const aliveAfterRetry = await evalIn(cdp, `document.body.innerText.length > 0`);
   check('panel responsive after reload-retry', aliveAfterRetry === true);
+
+  // ---- Paste-import E2E (deterministic, works logged-out) --------------------
+  // Top bar 导入/Import → textarea → 按前缀拆分 → 加入 → two paste_ rows + count.
+  const imported = await evalIn(
+    cdp,
+    `(async () => {
+      const importBtn = [...document.querySelectorAll('.scratch-toggle')]
+        .find((b) => /导入|Import/.test(b.innerText));
+      if (!importBtn) return 'NO_IMPORT_BTN';
+      importBtn.click();
+      await new Promise((r) => setTimeout(r, 400));
+      const ta = document.querySelector('.import-text');
+      if (!ta) return 'NO_DIALOG';
+      const setter = Object.getOwnPropertyDescriptor(
+        window.HTMLTextAreaElement.prototype, 'value').set;
+      setter.call(ta, '你：帮我总结这段\\n这是第一段要点\\nAI：好的，总结如下\\n要点一；要点二。');
+      ta.dispatchEvent(new Event('input', { bubbles: true }));
+      await new Promise((r) => setTimeout(r, 300));
+      const split = document.querySelector('.import-controls .chip-btn');
+      if (split) split.click();
+      await new Promise((r) => setTimeout(r, 300));
+      document.querySelector('.overlay-actions .btn-primary')?.click();
+      for (let i = 0; i < 10; i++) {
+        await new Promise((r) => setTimeout(r, 300));
+        const rows = document.querySelectorAll('.msg[data-mid^="paste_"]');
+        if (rows.length >= 2) return { rows: rows.length };
+      }
+      return 'NO_ROWS';
+    })()`,
+  );
+  check(
+    'paste import → split → two paste_ rows',
+    typeof imported === 'object' && imported.rows >= 2,
+    `rows=${typeof imported === 'object' ? imported.rows : imported}`,
+  );
+  const compiled = await evalIn(
+    cdp,
+    `(() => { const m = document.body.innerText.match(/(\\d+)\\s*段|([\\d,]+)\\s*pieces/);
+      return { text: document.body.innerText.slice(0, 200), matched: !!m }; })()`,
+  );
+  check('compile pipeline alive after import', compiled.matched === true, String(compiled.text).slice(0, 60).replace(/\n/g, ' | '));
+
+  // ---- Logged-in suite (persistent profile only) ------------------------------
+  const skipped = [];
+  if (!PERSIST) {
+    skipped.push('logged-in E2E (no .smoke-profile — run `pnpm smoke:login <ver>` once)');
+  } else {
+    // Open a REAL conversation from the sidebar (read-only navigation, the
+    // equivalent of a user click — never sends anything), then force-load.
+    await fetch(`${BASE}/json/new?https://chatgpt.com/`, { method: 'PUT' });
+    await sleep(6000);
+    const chatList = await (await fetch(`${BASE}/json/list`)).json();
+    const chatTab = chatList.find((t) => t.type === 'page' && /chatgpt\.com/.test(t.url));
+    if (!chatTab) {
+      skipped.push('logged-in E2E (no chatgpt.com tab)');
+    } else {
+      const chat = await connect(chatTab.webSocketDebuggerUrl);
+      const loggedIn = await evalIn(chat, `(() => ({ nav: !!document.querySelector('nav a[href*="/c/"]') }))()`);
+      if (!loggedIn.nav) {
+        skipped.push('logged-in E2E (profile not logged in — run `pnpm smoke:login <ver>`)');
+      } else {
+        await evalIn(chat, `document.querySelector('nav a[href*="/c/"]').click()`);
+        await sleep(7000);
+        // Force load via the top-right refresh — full backend read.
+        await evalIn(
+          cdp,
+          `(() => { document.querySelector('.topbar-refresh')?.click(); })()`,
+        );
+        let readOk = false;
+        let lastMid = '';
+        for (let i = 0; i < 90; i += 1) {
+          await sleep(1000);
+          const st = await evalIn(
+            cdp,
+            `(() => { const rows = [...document.querySelectorAll('.msg[data-mid]')]
+                 .filter((r) => !r.dataset.mid.startsWith('paste_'));
+               const err = document.querySelector('.notice-error');
+               return { count: rows.length, err: err ? err.innerText.slice(0, 80) : null,
+                 last: rows.length ? rows[rows.length - 1].dataset.mid : '' }; })()`,
+          );
+          if (st.err) {
+            check('logged-in read lands messages', false, st.err);
+            readOk = false;
+            break;
+          }
+          if (st.count > 0) {
+            readOk = true;
+            lastMid = st.last;
+            break;
+          }
+        }
+        check('logged-in read lands messages', readOk, `count>0 via topbar force load`);
+        if (readOk && lastMid) {
+          // Locate: click the LAST row's number (it is mounted), then the page
+          // must actually have that message in its DOM within the seek budget.
+          await evalIn(
+            cdp,
+            `(() => { const rows = [...document.querySelectorAll('.msg[data-mid]')]
+                 .filter((r) => !r.dataset.mid.startsWith('paste_'));
+               rows[rows.length - 1].querySelector('.msg-num')?.click(); })()`,
+          );
+          let located = false;
+          for (let i = 0; i < 30; i += 1) {
+            await sleep(1000);
+            const hit = await evalIn(
+              chat,
+              `!!document.querySelector('[data-message-id="${lastMid.replace(/"/g, '\\"')}"]')`,
+            );
+            if (hit) {
+              located = true;
+              break;
+            }
+          }
+          check('locate scrolls the page to the message', located, `mid=${lastMid.slice(0, 12)}…`);
+        }
+      }
+      chat.close();
+    }
+  }
+  for (const s of skipped) console.log(`SMOKE: SKIPPED — ${s}`);
 
   // 3. The panel is responsive AFTER the failure (gate + pipeline released).
   const alive = await evalIn(

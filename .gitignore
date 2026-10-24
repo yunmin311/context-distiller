@@ -25,3 +25,6 @@ stats-*.json
 # Local-only logo picker preview (not part of the product)
 logo-options.html
 release/
+
+# Smoke-test persistent profile (holds the tester's ChatGPT session — never commit)
+.smoke-profile/

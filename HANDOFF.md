@@ -65,13 +65,23 @@ Chrome MV3 侧边栏扩展（WXT + React 19 + TS），读取当前 ChatGPT 对�
 
 ```bash
 pnpm typecheck && pnpm test && pnpm build     # 80 个单测；全绿才继续
-pnpm smoke <版本号>                            # = node scripts/cdp-smoke.mjs .output/chrome-mv3 <版本号>
-                                              # 真实浏览器冒烟，RESULT PASS 才交付
+pnpm smoke <版本号>                            # 真实浏览器冒烟，RESULT PASS 才交付
 ```
 
-冒烟脚本做的事：临时干净配置真实加载扩展 → 打开 sidepanel.html → 断言版本号/首屏 → 打开真实 chatgpt.com → 点击读取 → 断言结构化错误卡片（通道活着、无挂起）→ 点重试 → 断言面板仍响应。
+冒烟分两级，按配置自动选择：
 
-**运行环境注记**：脚本按 Windows + Git Bash 编写（浏览器路径探测用 cmd.exe、进程清理用 taskkill、Edge/Chrome 安装路径为 Windows 形式）。在 WSL 下不能直接运行——要么从 Windows 侧执行，要么先把路径/进程管理改为 WSL 约定（此前 Codex 只读核对指出过这点）。CI 机房跑不了它（无浏览器），CI 只跑三关。
+- **匿名套件**（无 `.smoke-profile/` 时）：临时干净配置加载扩展 → 断言版本/首屏 → 真实 chatgpt.com
+  上点读取 → 断言结构化错误卡片与防挂起 → 重试响应 → **粘贴导入 E2E**（拆前缀成 2 行 + 编译管线）。
+- **登录态 E2E**（存在 `.smoke-profile/` 时自动追加）：从侧边栏打开真实对话（只读导航）→ 强制加载
+  → 断言消息落地 → 点末条 #编号 → 断言页面真的滚到该消息。**配置方法（一次性，人工登录）：
+  `pnpm smoke:login <版本号>`，在弹出的窗口里登录 ChatGPT，脚本轮询到会话后自动收尾。**
+  该目录存的是测试会话，已被 .gitignore，绝不提交、绝不复制。
+
+**运行环境注记**：脚本按 Windows + Git Bash 编写（浏览器路径探测用 cmd.exe、进程清理用 taskkill、
+Edge/Chrome 安装路径为 Windows 形式）。在 WSL 下不能直接运行。CI 机房跑不了它（无浏览器），CI 只跑三关。
+已知坑（都已修在脚本里，别回退）：品牌 Chrome 155+ 无视 `--load-extension`（脚本以 manifest 名字+版本逐一
+校验 SW）；**相对路径的 --load-extension 会被静默忽略**（必须 resolve 成绝对路径）；窗口模式可能附着到
+已有会话导致调试端口落空（用 headless=new）。
 
 **冒烟测试已知边界（不是失败）**：
 - 无头/匿名环境被 Cloudflare 拦 → 错误卡片显示「无法与页面通信/与页面的连接：无响应」= **正确行为**，断言接受它。

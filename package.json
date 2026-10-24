@@ -16,6 +16,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "smoke": "node scripts/cdp-smoke.mjs .output/chrome-mv3",
+    "smoke:login": "node scripts/cdp-smoke.mjs --login",
     "postinstall": "wxt prepare"
   },
   "devDependencies": {
