@@ -8,7 +8,7 @@
 
 ## 0. 项目一句话
 
-Chrome MV3 侧边栏扩展（WXT + React 19 + TS），读取当前 ChatGPT 对话 → 多粒度选材 → 确定性编译成一段纯文本 Prompt → 复制/回填。**不调模型、不存服务器、不自动发送。**当前版本 **1.4.4**，远端 `yunmin311/context-distiller`（main 已同步；v1.4.0–v1.4.4 tag 均在远端，v1.4.3 指向发布提交 d9fdd00）。
+Chrome MV3 侧边栏扩展（WXT + React 19 + TS），读取当前 ChatGPT 对话 → 多粒度选材 → 确定性编译成一段纯文本 Prompt → 复制/回填。**不调模型、不存服务器、不自动发送。**当前版本 **1.4.5**，远端 `yunmin311/context-distiller`（main 已同步；v1.4.0–v1.4.4 tag 均在远端，v1.4.3 指向发布提交 d9fdd00）。
 
 ## 1. 用户实证铁律（违反 = 复现已知事故）
 
@@ -87,6 +87,25 @@ Edge/Chrome 安装路径为 Windows 形式）。在 WSL 下不能直接运行。
 - 无头/匿名环境被 Cloudflare 拦 → 错误卡片显示「无法与页面通信/与页面的连接：无响应」= **正确行为**，断言接受它。
 - 品牌版 Chrome 155+ **无视 `--load-extension`**（自己的组件扩展照常加载，会以假乱真）——脚本已 Edge 优先 + 用 manifest 名字/版本逐一校验 SW。若两浏览器都报 "did not load the extension"，先 `tasklist | grep -icE "msedge|chrome"` 清残留进程再跑。
 - 登录态的真实读取成功率无法自动化（需要用户账号），这一步永远是用户验证。
+
+## 4.5 重大发现：ChatGPT 新壳与 SSR 降级（2026-10-24，E2E 实证）
+
+ChatGPT 的应用壳把对话**服务端渲染成带说话人前缀的纯文本**（「你说：…」/「ChatGPT 说：…」），
+交互 UI 之后再水合。实测条件下水合**可能永远不发生**（自动化环境；用户的陈旧标签页大概率同样），
+页面上 `data-message-*` 锚点数量为 0 —— 这一次性解释了用户报告的全部症状：
+DOM 读取死亡（只剩慢速后端读取，35s 首行）、定位永久失败（无锚点）、跟随死亡、刷新页面能救（重新加载触发一次水合窗口）。
+
+**v1.4.5 的应对**：`extractFromSsrFallback()`（chatgpt.content.ts）——页面无锚点时解析降级文本
+（复用 paste-split 语法，已支持 说 后缀），读取变为**瞬时且零后端**（实测 35.3s → 1.0s）。
+SSR 行是合成 id（msg_N），定位按钮自动隐藏（msg.ssrNoLocate）。
+
+**对你（接手者）的意义**：
+- 读路径现状 = SSR 降级（快）→ 水合后 DOM（快）→ 后端（慢，最后手段）。三层都在。
+- 定位/跟随只在**水合后**可用。水合由 ChatGPT 掌控，自动化环境无法触发（trusted input、
+  bringToFront 都试过）。用户端若水合则定位应恢复；若用户的页面同样不水合，定位在
+  ChatGPT 恢复锚点渲染之前都不可能——这不是扩展能修的。
+- E2E 的 locate 断言会先检查页面锚点数，0 则 SKIPPED（合理）。
+- `.smoke-profile`（已 gitignore）存有测试会话；`pnpm smoke:login <ver>` 一次性重建。
 
 ## 5. 未决问题（按优先级）
 
