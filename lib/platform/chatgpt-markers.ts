@@ -87,8 +87,8 @@ export const TURN_SELECTOR = '[data-turn-key]';
 /**
  * The new shell's MESSAGE-ID anchor: a space-separated list of backend message
  * ids on each turn (E2E-verified: the panel's backend ids appear verbatim in
- * these lists). `data-turn-key` is a DIFFERENT id namespace (turn key, not
- * message id) and must not be used to match backend ids.
+ * these lists). Do NOT use the turn's own data-turn-key for this — it is a
+ * DIFFERENT id namespace (turn key, not message id).
  */
 export const TURN_MESSAGE_IDS_ATTR = 'data-chatgpt-search-message-ids';
 
