@@ -35,6 +35,7 @@ const zh = {
   'top.langTip': '切换界面与提示词语言（中文 / English）',
   'top.langAria': '切换语言',
   'top.import': '导入',
+  'top.partialTip': '当前是部分读取（只含页面已挂载的回合）——点右上角刷新可立即拉取完整对话',
   'top.importTip':
     '手动粘贴导入：把文本作为消息加入列表（读取不可用时的兜底；只进侧边栏，不发任何请求）',
 
@@ -222,6 +223,8 @@ const en: Record<UIKey, string> = {
   'top.langTip': 'Switch interface and prompt language (中文 / English)',
   'top.langAria': 'Switch language',
   'top.import': 'Import',
+  'top.partialTip':
+    'Partial read (only the mounted turns) — click the top-right refresh to pull the full thread now',
   'top.importTip':
     'Paste import: add text as messages (the fallback when reading is unavailable; stays in the panel, never sent anywhere)',
 

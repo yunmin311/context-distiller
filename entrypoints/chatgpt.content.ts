@@ -434,7 +434,10 @@ async function getConversation(message: PanelRequest & { kind: 'get-conversation
   const domOnly = message.domOnly === true;
   const apiPromise = domOnly
     ? null
-    : requestMainWorld(40000, 'extract-api', message.bypassCache === true);
+        // 100s ceiling: the backend fetch is now patient (3 tries: 15/30/45s) so a
+    // huge thread can complete in the background; the 4s race still answers
+    // the panel immediately with the mounted/SSR partial.
+    : requestMainWorld(100000, 'extract-api', message.bypassCache === true);
   const api = apiPromise
     ? await Promise.race([
         apiPromise,
@@ -461,7 +464,14 @@ async function getConversation(message: PanelRequest & { kind: 'get-conversation
         : api.error ?? 'unknown',
     );
     let domRaw = chatgptAdapter.extractFromDom();
-    if (domRaw.length === 0) domRaw = extractFromSsrFallback(); // non-hydrated shell
+    let ssrFull = false;
+    if (domRaw.length === 0) {
+      // Non-hydrated shell: the SSR fallback text is the server-rendered FULL
+      // thread — a read from it is COMPLETE, not partial (no pointless
+      // upgrade reads afterwards).
+      domRaw = extractFromSsrFallback();
+      ssrFull = domRaw.length > 0;
+    }
     if (domRaw.length > 0) {
       const mw = await requestMainWorld(400);
       const mwText = new Map<string, string>();
@@ -484,7 +494,7 @@ async function getConversation(message: PanelRequest & { kind: 'get-conversation
       source = 'page-data';
       bridgeCount = mw?.ok && mw.messages ? mw.messages.length : 0;
     }
-    partial = true;
+    partial = !ssrFull;
 
     // Stage 2 — report the outcome of the background full read (never in
     // DOM-ONLY mode: there is no background read by design).
@@ -493,12 +503,17 @@ async function getConversation(message: PanelRequest & { kind: 'get-conversation
         if (location.href !== url) return; // user moved on to another conversation
         if (late?.ok && late.messages && late.messages.length > 0) {
           console.info('[Context Distiller] late FULL read arrived — panel will upgrade itself');
+          const messages = normalizeMessages(
+            late.messages.map((m) => ({ ...m, source: 'page-data' as const })),
+          );
           try {
             void browser.runtime
               .sendMessage({
                 kind: 'conversation-grew',
                 mounted: document.querySelectorAll(MESSAGE_SELECTOR).length,
                 reason: 'full-ready',
+                conversation: { title, url, platform: chatgptAdapter.id },
+                messages,
               } satisfies ConversationGrewPush)
               .catch(() => {});
           } catch {

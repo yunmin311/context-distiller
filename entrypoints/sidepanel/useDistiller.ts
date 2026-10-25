@@ -903,6 +903,22 @@ export function useDistiller() {
     () => ({
       loadConversation,
       retryRead,
+      /** Apply a COMPLETED read pushed by the content script (the late full
+       *  read of a huge thread) — no second backend fetch. */
+      applyRead: (payload: {
+        conversation: ConversationInfo;
+        messages: ConversationMessage[];
+        partial: boolean;
+        source: MessageSource;
+      }) => {
+        dispatch({
+          type: 'load-success',
+          conversation: payload.conversation,
+          messages: payload.messages,
+          partial: payload.partial,
+          source: payload.source,
+        });
+      },
       addMessageFragment,
       addSelection,
       addPastedMessages,

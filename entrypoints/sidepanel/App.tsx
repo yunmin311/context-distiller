@@ -170,6 +170,23 @@ export function App() {
         () => {
           if (reason === 'grown') {
             void actions.loadConversation(true, { background: true, merge: true, domOnly: true });
+          } else if (
+            m.reason === 'full-ready' &&
+            (m as { conversation?: unknown; messages?: unknown }).messages
+          ) {
+            // The content script's patient background read COMPLETED and pushed
+            // its payload — apply it directly. Re-reading would repeat a fetch
+            // that can take 90s on huge threads.
+            const push = m as {
+              conversation: import('../../lib/core/types').ConversationInfo;
+              messages: import('../../lib/core/types').ConversationMessage[];
+            };
+            actions.applyRead({
+              conversation: push.conversation,
+              messages: push.messages,
+              partial: false,
+              source: 'page-data',
+            });
           } else {
             void actions.loadConversation(true, { background: true, merge: true });
           }
@@ -751,7 +768,13 @@ export function App() {
           {t('top.import')}
         </button>
         {state.messages.length > 0 && (
-          <span className="muted tiny topbar-count">{state.messages.length}</span>
+          <span
+            className="muted tiny topbar-count"
+            title={state.partial ? t('top.partialTip') : undefined}
+          >
+            {state.messages.length}
+            {state.partial ? '+' : ''}
+          </span>
         )}
         <button
           className="icon-btn topbar-refresh"

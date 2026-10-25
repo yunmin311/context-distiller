@@ -5,6 +5,21 @@ All notable changes to Context Distiller are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.9] — 2026-10-25
+
+### Fixed
+- **长对话读取只到挂载数（「右侧只有 8/8」）**：考古确认 v1.1/v1.2 的后端读取是 2×15s 阻塞式
+  （慢但读得全），v1.3.0 改为 4s 竞速 + 后台 2×11s——巨型线程 11 秒/次永远拉不完，面板永远停在
+  页面挂载的部分回合。修复：后端读取改为**耐心梯度预算（15s→30s→45s，共 ~90s）**，外层等待上限
+  同步放开到 100s。快速首屏（4s 竞速的 DOM/SSR 部分）不受影响——耐心只决定完整线程是否最终落地。
+- **完整读取不再二次拉取**：v1.3 的信号式设计里，后台读完只发信号、面板再重新拉一次——巨型线程
+  等于双倍 90 秒。现在 `conversation-grew(full-ready)` 推送**直接携带已完成的读取结果**，面板原地应用。
+- **SSR 降级读取标记为完整**（partial=false）：降级文本是服务端渲染的整条对话，不再触发无意义的升级读取。
+
+### Added
+- **部分读取可见化**：顶栏消息计数在部分读取时显示 `N+`，悬停提示「点右上角刷新可立即拉取完整对话」
+  ——不再让用户把部分读取误认为完整对话。
+
 ## [1.4.8] — 2026-10-25
 
 ### Fixed

@@ -115,13 +115,19 @@ export default defineUnlistedScript(() => {
     init: RequestInit,
     attempts: number,
     perTryMs: number,
+    perTrySchedule?: number[],
   ): Promise<any> {
     let lastErr = 'network';
     for (let i = 0; i < attempts; i += 1) {
+      // Progressive per-try budget: a huge thread's JSON can take far longer
+      // than the first try allows — later tries get more time instead of
+      // repeating the same too-short abort (v1.1/v1.2 used a flat 15s×2 and
+      // still read huge threads; v1.3's flat 11s×2 made them fail forever).
+      const budget = perTrySchedule?.[i] ?? perTryMs;
       // Abort a single try that HANGS (a stuck socket), so we retry instead of
       // silently eating the whole read budget — the old failure mode on long reads.
       const ctrl = new AbortController();
-      const timer = setTimeout(() => ctrl.abort(), perTryMs);
+      const timer = setTimeout(() => ctrl.abort(), budget);
       try {
         const r = await fetch(url, { ...init, signal: ctrl.signal });
         clearTimeout(timer);
@@ -129,7 +135,7 @@ export default defineUnlistedScript(() => {
         lastErr = `status ${r.status}`;
       } catch {
         clearTimeout(timer);
-        lastErr = ctrl.signal.aborted ? `hung > ${perTryMs}ms` : 'network error';
+        lastErr = ctrl.signal.aborted ? `hung > ${budget}ms` : 'network error';
       }
       if (i < attempts - 1) await new Promise((res) => setTimeout(res, 500 * (i + 1)));
     }
@@ -181,17 +187,21 @@ export default defineUnlistedScript(() => {
 
     const token = await getAccessToken();
 
-    // The big one — give each try up to 11s (a huge thread's JSON is large), two
-    // tries. Deliberately bounded so the WHOLE read stays inside the panel's
-    // outer budget even when the endpoint is tarpitting us: hanging 15s-per-try
-    // plus a token-refresh second round used to stretch a failing read past a
-    // minute, which read as "refresh takes forever and then shows 5 messages".
+    // The big one — PATIENT, PROGRESSIVE budget (v1.4.9): a huge thread's JSON
+    // is large and grows with the conversation; flat 2×11s (v1.3+) aborted
+    // mid-download forever, leaving the panel stuck on the mounted partial
+    // (8/8 forever). v1.1/v1.2 used 2×15s blocking and read huge threads fine.
+    // Now: 3 tries with a growing schedule (15s → 30s → 45s ≈ 90s total). The
+    // panel already shows the fast DOM/SSR partial via the 4s race, so patience
+    // here costs nothing visually — it only decides whether the FULL thread
+    // ever lands.
     const load = (t: string) =>
       fetchJsonRetry(
         conversationEndpoint(convId),
         { headers: { Authorization: `Bearer ${t}` }, credentials: 'include' },
-        2,
-        11000,
+        3,
+        15000,
+        [15000, 30000, 45000],
       );
     const conv = await load(token);
     const mapping = conv?.mapping;

@@ -121,6 +121,14 @@ export interface ConversationGrewPush {
   kind: 'conversation-grew';
   mounted: number;
   reason: 'grown' | 'full-ready';
+  /**
+   * 'full-ready' carries the COMPLETED background read's actual payload: a
+   * huge thread's patient fetch can take 90s — re-fetching it (v1.3's
+   * signal-only design) would double the wait. The panel applies this
+   * directly instead of reading again.
+   */
+  conversation?: import('../core/types').ConversationInfo;
+  messages?: import('../core/types').ConversationMessage[];
 }
 
 /** Pushed when ChatGPT's theme (light/dark or accent) changes, so the panel follows. */
