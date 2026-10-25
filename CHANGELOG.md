@@ -5,6 +5,30 @@ All notable changes to Context Distiller are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.6] — 2026-10-24
+
+### Fixed
+- **定位/跟随适配新版 ChatGPT DOM**：新版应用壳的回合元素改用 `data-turn-key`（= 消息 UUID）、
+  角色在内层 `h4[data-conversation-role]`（sr-only 标头，提取文本时剔除）、流式状态用
+  `data-talvt-turn-state`（非 complete 即生成中）、滚动容器为 `.thread-scroll-container`。
+  读取 / 定位 / 跟随 / 滚动寻址全部改为新旧锚点双模式（`messageByAnyIdSelector`）。
+  实测数据（用户真实页面）：`data-message-id` = 0，`data-turn-key` = 5 回合。
+
+### Changed
+- 降级读取（SSR 文本）的守卫改为双壳检测（旧标记或新回合任一存在即视为水合）。
+
+## [1.4.5] — 2026-10-24
+
+### Fixed
+- **SSR 降级读取（读取提速的核心）**：ChatGPT 新版应用壳把对话服务端渲染为带说话人前缀的纯文本，
+  水合可能长期不发生（实测），页面 `data-message-*` 锚点为 0 —— DOM 读取死亡、读取只能走慢速后端
+  路径（实测 35 秒首行）。v1.4.5 解析该降级文本（复用粘贴拆分语法，新增 说 后缀前缀：
+  你说：/ChatGPT 说：/AI说：…），读取变为瞬时且零后端。**实测：首行 35.3s → 1.0s，稳定 40.3s → 6.1s。**
+- **切换会话快速退避**：自动/切换读取的重试梯从 ~33s 缩到 ~5s（期间用户点击不再被长时间吞掉）。
+
+### Added
+- 降级行（合成 id）自动隐藏定位按钮，带独立说明文案（msg.ssrNoLocate）。
+
 ## [1.4.4] — 2026-10-23
 
 交接复核轮（Codex 只读核对发现的问题全部处理；除闸门重试外均为工程修正）。
