@@ -606,10 +606,10 @@ try {
           // the extension correctly hides locate for those rows.
           const pageAnchors = await evalIn(
             chat,
-            `document.querySelectorAll('[data-message-id]').length`,
+            `document.querySelectorAll('[data-turn-key],[data-message-id]').length`,
           );
           if (pageAnchors === 0) {
-            skipped.push('locate E2E (page shell not hydrated — no data-message-id anchors)');
+            skipped.push('locate E2E (page shell not hydrated — no turn/message anchors)');
           } else {
             // Locate: click the LAST row's number (it is mounted), then the page
             // must actually have that message in its DOM within the seek budget.

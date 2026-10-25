@@ -9,6 +9,9 @@ import {
   SEND_BUTTON_SELECTOR,
   TITLE_NAV_SELECTOR,
   TITLE_SUFFIX_RE,
+  TURN_KEY_ATTR,
+  TURN_ROLE_ATTR,
+  TURN_SELECTOR,
   messageByIdSelector,
 } from './chatgpt-markers';
 
@@ -57,12 +60,25 @@ export const chatgptAdapter: PlatformAdapter = {
   },
 
   extractFromDom(): RawMessage[] {
-    const nodes = document.querySelectorAll<HTMLElement>(MESSAGE_SELECTOR);
+    // Legacy DOM first (turns carry data-message-author-role / -id).
     const out: RawMessage[] = [];
-    nodes.forEach((node) => {
+    document.querySelectorAll<HTMLElement>(MESSAGE_SELECTOR).forEach((node) => {
       const role = node.getAttribute(AUTHOR_ROLE_ATTR) ?? '';
       const id = node.getAttribute(MESSAGE_ID_ATTR) ?? undefined;
       const text = readMessageText(node);
+      if (text) out.push({ id, role, text, source: 'dom' });
+    });
+    if (out.length > 0) return out;
+
+    // New app-shell: turns carry data-turn-key (= the message UUID); the role
+    // lives on an sr-only heading INSIDE assistant turns (user turns have none
+    // → default). The sr-only heading text must not leak into the turn text.
+    document.querySelectorAll<HTMLElement>(TURN_SELECTOR).forEach((turn) => {
+      const roleHeading = turn.querySelector<HTMLElement>(`[${TURN_ROLE_ATTR}]`);
+      const role = roleHeading?.getAttribute(TURN_ROLE_ATTR) ?? 'user';
+      const id = turn.getAttribute(TURN_KEY_ATTR) ?? undefined;
+      const headingText = roleHeading?.innerText ?? '';
+      const text = (turn.innerText ?? '').replace(headingText, '').trim();
       if (text) out.push({ id, role, text, source: 'dom' });
     });
     return out;

@@ -71,6 +71,36 @@ export const THEME_ACCENT_VARS = [
   '--text-accent',
 ];
 
+// --- New app-shell (2025+ build; confirmed live 2026-10) ----------------------
+//
+// The new shell renders turns with a DIFFERENT attribute set and hydrates
+// late (often never, in stale/automated tabs). Confirmed on a real page:
+//   [data-turn-key]           → one per turn; value = the message UUID
+//   [data-conversation-role]  → on an sr-only <h4> INSIDE assistant turns
+//                               (absent on user turns → default 'user')
+//   [data-talvt-turn-state]   → "complete" when settled; other values stream
+//   .thread-scroll-container  → the conversation scroller
+
+/** One conversation turn in the new shell. */
+export const TURN_SELECTOR = '[data-turn-key]';
+
+/** The new shell's message-id attribute (same UUID namespace as the backend). */
+export const TURN_KEY_ATTR = 'data-turn-key';
+
+/** Role attribute on the sr-only heading inside assistant turns. */
+export const TURN_ROLE_ATTR = 'data-conversation-role';
+
+/** Per-turn lifecycle state; anything but "complete" means it is streaming. */
+export const TURN_STATE_ATTR = 'data-talvt-turn-state';
+export const TURN_COMPLETE_STATE = 'complete';
+
+/** The conversation scroller in the new shell. */
+export const THREAD_SCROLL_SELECTOR = '.thread-scroll-container';
+
+/** Selector matching a message by id in EITHER the new shell or the legacy DOM. */
+export const messageByAnyIdSelector = (id: string): string =>
+  `[data-turn-key="${CSS.escape(id)}"], [data-chatgpt-selection-message-id="${CSS.escape(id)}"], [data-message-id="${CSS.escape(id)}"]`;
+
 // --- React internals (main world only) ----------------------------------------
 
 /** Expando keys React injects on rendered elements; walking them reaches props. */

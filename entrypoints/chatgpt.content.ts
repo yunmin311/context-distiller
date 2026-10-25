@@ -12,7 +12,12 @@ import {
   STOP_BUTTON_SELECTOR,
   STREAMING_CLASS_SELECTOR,
   THEME_ACCENT_VARS,
-  messageByIdSelector,
+  THREAD_SCROLL_SELECTOR,
+  TURN_COMPLETE_STATE,
+  TURN_KEY_ATTR,
+  TURN_STATE_ATTR,
+  TURN_SELECTOR,
+  messageByAnyIdSelector,
 } from '../lib/platform/chatgpt-markers';
 import {
   MW_REQUEST_EVENT,
@@ -92,7 +97,8 @@ export default defineContentScript({
  * that actually contains speaker lines, so a hydrated page is untouched.
  */
 function extractFromSsrFallback(): RawMessage[] {
-  if (document.querySelector(MESSAGE_SELECTOR)) return []; // hydrated — normal path
+  // Hydrated (either shell) — the normal paths apply, the fallback must not run.
+  if (document.querySelector(`${MESSAGE_SELECTOR}, ${TURN_SELECTOR}`)) return [];
   const frame =
     document.querySelector<HTMLElement>('[class*="MainContentFrame"]') ??
     document.querySelector<HTMLElement>('main');
@@ -106,10 +112,16 @@ function extractFromSsrFallback(): RawMessage[] {
 }
 
 function isGenerating(): boolean {
-  // VISIBILITY-CHECKED: ChatGPT has been seen to leave a hidden STOP button (or
-  // a stale streaming class) in the DOM after a run finishes. Existence alone
-  // then read as "generating" FOREVER — which v1.4's locate guard turned into
-  // "locate is permanently refused". Both signals must actually be on screen.
+  // New shell: per-turn lifecycle state — anything but "complete" is streaming.
+  const activeTurn = document.querySelector(`[${TURN_STATE_ATTR}]`);
+  if (
+    activeTurn &&
+    activeTurn.getAttribute(TURN_STATE_ATTR) !== TURN_COMPLETE_STATE
+  ) {
+    return true;
+  }
+  // Legacy signals, visibility-checked (stale hidden stop buttons made
+  // existence-only checks read as "generating forever").
   const stop = document.querySelector<HTMLElement>(STOP_BUTTON_SELECTOR);
   if (stop && (stop.offsetParent !== null || stop.getClientRects().length > 0)) return true;
   const streaming = document.querySelector<HTMLElement>(STREAMING_CLASS_SELECTOR);
@@ -292,7 +304,10 @@ function isProgrammaticScroll(): boolean {
  * has scrolled to / is reading at the top of the viewport.
  */
 function topVisibleMessageId(): string | null {
-  const nodes = Array.from(document.querySelectorAll<HTMLElement>(MESSAGE_SELECTOR));
+  // Both shells: legacy data-message-id nodes and new-shell turn keys.
+  const nodes = Array.from(
+    document.querySelectorAll<HTMLElement>(`${MESSAGE_SELECTOR}, ${TURN_SELECTOR}`),
+  );
   const LINE = 140; // a little below the very top of the viewport
   let best: HTMLElement | null = null;
   let bestTop = -Infinity;
@@ -312,7 +327,8 @@ function topVisibleMessageId(): string | null {
       }
     }
   }
-  return best ? best.getAttribute(MESSAGE_ID_ATTR) : null;
+  if (!best) return null;
+  return best.getAttribute(MESSAGE_ID_ATTR) ?? best.getAttribute(TURN_KEY_ATTR);
 }
 
 /** Inject the main-world bridge; swallow failures so DOM extraction still works. */
@@ -574,7 +590,7 @@ async function scrollToMessage(messageId: string, orderedIds?: string[]): Promis
   // misfired on real ChatGPT UIs and permanently refused locate — the user's
   // BEST feature. 1.3 semantics restored: always attempt; worst case the seek
   // fails and the page returns to where it was.
-  const sel = messageByIdSelector(messageId);
+  const sel = messageByAnyIdSelector(messageId);
   // Mute the follow push for the whole operation (extended by each seek step).
   beginProgrammaticScroll(2000);
   let el = document.querySelector<HTMLElement>(sel);
@@ -748,7 +764,10 @@ function flashElement(el: HTMLElement): void {
 
 /** The scrollable ancestor that holds the conversation (best effort). */
 function findScrollContainer(): HTMLElement {
-  const anyMsg = document.querySelector<HTMLElement>(MESSAGE_SELECTOR);
+  // New shell names its scroller explicitly — trust it when present.
+  const named = document.querySelector<HTMLElement>(THREAD_SCROLL_SELECTOR);
+  if (named && named.scrollHeight - named.clientHeight > 60) return named;
+  const anyMsg = document.querySelector<HTMLElement>(`${MESSAGE_SELECTOR}, ${TURN_SELECTOR}`);
   let el: HTMLElement | null = anyMsg?.parentElement ?? null;
   // Pick the ancestor with the LARGEST scrollable range — the real conversation
   // scroller, not the first nested element that merely allows overflow.
@@ -777,13 +796,15 @@ async function seekToMessage(messageId: string, orderedIds: string[]): Promise<H
   if (targetOrder < 0) return null;
   const container = findScrollContainer();
   const orderOf = new Map(orderedIds.map((id, i) => [id, i] as const));
-  const sel = messageByIdSelector(messageId);
+  const sel = messageByAnyIdSelector(messageId);
   const wait = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
   const maxTop = () => Math.max(1, container.scrollHeight - container.clientHeight);
 
   const mountedOrders = (): number[] =>
-    Array.from(document.querySelectorAll<HTMLElement>(`[${MESSAGE_ID_ATTR}]`))
-      .map((node) => orderOf.get(node.getAttribute(MESSAGE_ID_ATTR) || ''))
+    Array.from(
+      document.querySelectorAll<HTMLElement>(`[${MESSAGE_ID_ATTR}], [${TURN_KEY_ATTR}]`),
+    )
+      .map((node) => orderOf.get(node.getAttribute(MESSAGE_ID_ATTR) || node.getAttribute(TURN_KEY_ATTR) || ''))
       .filter((o): o is number => typeof o === 'number');
 
   // One proportional jump to get in the neighbourhood…
