@@ -613,6 +613,15 @@ try {
           } else {
             // Locate: click the LAST row's number (it is mounted), then the page
             // must actually have that message in its DOM within the seek budget.
+          // Capture the id AT CLICK TIME: the first-rows snapshot may still be
+          // synthetic (SSR) — the backend replace lands seconds later.
+          lastMid =
+            (await evalIn(
+              cdp,
+              `(() => { const rows = [...document.querySelectorAll('.msg[data-mid]')]
+                   .filter((r) => !r.dataset.mid.startsWith('paste_'));
+                 return rows.length ? rows[rows.length - 1].dataset.mid : ''; })()`,
+            )) || lastMid;
           await evalIn(
             cdp,
             `(() => { const rows = [...document.querySelectorAll('.msg[data-mid]')]
@@ -624,7 +633,7 @@ try {
             await sleep(1000);
             const hit = await evalIn(
               chat,
-              `!!document.querySelector('[data-message-id="${lastMid.replace(/"/g, '\\"')}"]')`,
+              `!!document.querySelector('[data-message-id="${lastMid.replace(/"/g, '\\"')}"], [data-chatgpt-search-message-ids~="${lastMid.replace(/"/g, '\\"')}"]')`,
             );
             if (hit) {
               located = true;
@@ -635,10 +644,12 @@ try {
             // Diagnostics: what does the PAGE actually have vs the PANEL rows?
             const diag = await evalIn(
               chat,
-              `(() => { const ids = [...document.querySelectorAll('[data-message-id]')]
-                   .map((n) => n.getAttribute('data-message-id'));
-                 return { count: ids.length, first: ids[0] ?? '', last: ids[ids.length - 1] ?? '',
-                   url: location.pathname.slice(0, 50) }; })()`,
+              `(() => { const ids = [...document.querySelectorAll('[data-turn-key],[data-message-id]')]
+                   .map((n) => n.getAttribute('data-turn-key') || n.getAttribute('data-message-id'));
+                 const searchIds = [...document.querySelectorAll('[data-chatgpt-search-message-ids]')]
+                   .slice(0, 6).map((n) => (n.getAttribute('data-chatgpt-search-message-ids') || '').slice(0, 60));
+                 return { count: ids.length, first: (ids[0] ?? '').slice(0, 18), last: (ids[ids.length - 1] ?? '').slice(0, 18),
+                   searchIds, url: location.pathname.slice(0, 50) }; })()`,
             );
             const panelDiag = await evalIn(
               cdp,

@@ -6,6 +6,7 @@ import { splitPastedConversation } from '../lib/utils/paste-split';
 import {
   AUTHOR_ROLE_ATTR,
   CONVERSATION_ID_RE,
+  MESSAGE_ANCHOR_SELECTOR,
   MESSAGE_ID_ATTR,
   MESSAGE_SELECTOR,
   SEND_BUTTON_SELECTOR,
@@ -14,7 +15,7 @@ import {
   THEME_ACCENT_VARS,
   THREAD_SCROLL_SELECTOR,
   TURN_COMPLETE_STATE,
-  TURN_KEY_ATTR,
+  TURN_MESSAGE_IDS_ATTR,
   TURN_STATE_ATTR,
   TURN_SELECTOR,
   messageByAnyIdSelector,
@@ -98,7 +99,8 @@ export default defineContentScript({
  */
 function extractFromSsrFallback(): RawMessage[] {
   // Hydrated (either shell) — the normal paths apply, the fallback must not run.
-  if (document.querySelector(`${MESSAGE_SELECTOR}, ${TURN_SELECTOR}`)) return [];
+  if (document.querySelector(`${MESSAGE_SELECTOR}, ${TURN_SELECTOR}, [${TURN_MESSAGE_IDS_ATTR}]`))
+    return [];
   const frame =
     document.querySelector<HTMLElement>('[class*="MainContentFrame"]') ??
     document.querySelector<HTMLElement>('main');
@@ -304,9 +306,9 @@ function isProgrammaticScroll(): boolean {
  * has scrolled to / is reading at the top of the viewport.
  */
 function topVisibleMessageId(): string | null {
-  // Both shells: legacy data-message-id nodes and new-shell turn keys.
+  // Both shells: legacy data-message-id nodes and new-shell turn id lists.
   const nodes = Array.from(
-    document.querySelectorAll<HTMLElement>(`${MESSAGE_SELECTOR}, ${TURN_SELECTOR}`),
+    document.querySelectorAll<HTMLElement>(MESSAGE_ANCHOR_SELECTOR),
   );
   const LINE = 140; // a little below the very top of the viewport
   let best: HTMLElement | null = null;
@@ -328,7 +330,10 @@ function topVisibleMessageId(): string | null {
     }
   }
   if (!best) return null;
-  return best.getAttribute(MESSAGE_ID_ATTR) ?? best.getAttribute(TURN_KEY_ATTR);
+  return (
+    best.getAttribute(MESSAGE_ID_ATTR) ??
+    ((best.getAttribute(TURN_MESSAGE_IDS_ATTR) || '').split(/\s+/)[0] || null)
+  );
 }
 
 /** Inject the main-world bridge; swallow failures so DOM extraction still works. */
@@ -586,10 +591,9 @@ async function deepWalkStep(toTop: boolean): Promise<PanelResponse> {
  * mounts. If it still can't be found, we say so instead of guessing.
  */
 async function scrollToMessage(messageId: string, orderedIds?: string[]): Promise<PanelResponse> {
-  // NO generating-guard here (v1.4.2 lesson): the "visible stop button" test
-  // misfired on real ChatGPT UIs and permanently refused locate — the user's
-  // BEST feature. 1.3 semantics restored: always attempt; worst case the seek
-  // fails and the page returns to where it was.
+  // Ported VERBATIM from v1.3.0 (user verdict: the old locate was the product's
+  // best feature — do not redesign it). Only the anchor selector is dual-mode
+  // (new-shell turn keys + legacy data-message-id).
   const sel = messageByAnyIdSelector(messageId);
   // Mute the follow push for the whole operation (extended by each seek step).
   beginProgrammaticScroll(2000);
@@ -599,31 +603,17 @@ async function scrollToMessage(messageId: string, orderedIds?: string[]): Promis
     // settled yet (heights still being measured), which is why it used to take a
     // few clicks. Run the seek, and if it comes up empty, run it once more — the
     // first pass leaves the list warmed up and measured, so the retry lands.
-    // A FAILED hunt used to strand the user wherever it ran out of budget —
-    // remember where they were and put them back instead.
-    const savedTop = findScrollContainer().scrollTop;
     el = await seekToMessage(messageId, orderedIds);
     if (!el) {
       await new Promise<void>((r) => setTimeout(r, 200));
       el = await seekToMessage(messageId, orderedIds);
     }
-    if (!el) {
-      findScrollContainer().scrollTo({ top: savedTop, behavior: 'auto' });
-      beginProgrammaticScroll(1500);
-      return {
-        kind: 'scroll-result',
-        ok: false,
-        error: '这条暂时没找到（对话太长或刚被虚拟化），已回到原位置；稍后再点一次通常能到。',
-        code: 'err.scrollNotFound',
-      };
-    }
   }
   if (!el) {
-    // Not mounted and no ordered ids to seek with — cannot reach it.
     return {
       kind: 'scroll-result',
       ok: false,
-      error: '这条暂时没找到，请刷新页面后再试。',
+      error: '这条当前找不到（可能刚被折叠/虚拟化），刷新页面后再试。',
       code: 'err.scrollNotFound',
     };
   }
@@ -801,11 +791,17 @@ async function seekToMessage(messageId: string, orderedIds: string[]): Promise<H
   const maxTop = () => Math.max(1, container.scrollHeight - container.clientHeight);
 
   const mountedOrders = (): number[] =>
-    Array.from(
-      document.querySelectorAll<HTMLElement>(`[${MESSAGE_ID_ATTR}], [${TURN_KEY_ATTR}]`),
-    )
-      .map((node) => orderOf.get(node.getAttribute(MESSAGE_ID_ATTR) || node.getAttribute(TURN_KEY_ATTR) || ''))
-      .filter((o): o is number => typeof o === 'number');
+    Array.from(document.querySelectorAll<HTMLElement>(MESSAGE_ANCHOR_SELECTOR)).flatMap(
+      (node) => {
+        const legacy = node.getAttribute(MESSAGE_ID_ATTR);
+        const ids = legacy
+          ? [legacy]
+          : (node.getAttribute(TURN_MESSAGE_IDS_ATTR) || '').split(/\s+/);
+        return ids
+          .map((id) => orderOf.get(id))
+          .filter((o): o is number => typeof o === 'number');
+      },
+    );
 
   // One proportional jump to get in the neighbourhood…
   let top = (targetOrder / Math.max(1, orderedIds.length - 1)) * maxTop();
@@ -819,18 +815,9 @@ async function seekToMessage(messageId: string, orderedIds: string[]): Promise<H
   // hunt oscillate — the virtualizer changes scrollHeight underfoot, so a computed
   // position is stale by the time it applies. Stepping can't overshoot by more than
   // one screen, which is why this lands on the first click instead of the third.
-  //
-  // v1.4.2: the 1.4.0 "stall-break" (6 static steps → abort) made seeks fail MORE
-  // than 1.3's dumb walk — on huge threads the virtualizer routinely takes
-  // seconds to feed rows, and the break fired long before the budget did. Back
-  // to a TIME-CAPPED walk: up to 64 steps, never longer than 15s; stalled steps
-  // wait longer (give the virtualizer time to mount) instead of aborting.
+  // (Ported verbatim from v1.3.0 — same step size, same waits, same budget.)
   const step = Math.max(200, container.clientHeight * 0.8);
-  const deadline = Date.now() + 20_000;
-  let bandKey = '';
-  let stalled = 0;
-  for (let attempt = 0; attempt < 80; attempt += 1) {
-    if (Date.now() > deadline) break;
+  for (let attempt = 0; attempt < 40; attempt += 1) {
     const mounted = mountedOrders();
     let dir = 0;
     if (mounted.length === 0) {
@@ -847,13 +834,6 @@ async function seekToMessage(messageId: string, orderedIds: string[]): Promise<H
       dir = 1;
     }
 
-    const key = `${dir}:${mounted.length ? Math.min(...mounted) : '*'}-${mounted.length ? Math.max(...mounted) : '*'}`;
-    if (key === bandKey) stalled += 1;
-    else {
-      stalled = 0;
-      bandKey = key;
-    }
-
     const extent = maxTop();
     const next = Math.max(0, Math.min(extent, top + dir * step));
     if (next === top) break; // pinned at an end and still nothing — give up cleanly
@@ -861,7 +841,7 @@ async function seekToMessage(messageId: string, orderedIds: string[]): Promise<H
 
     beginProgrammaticScroll(1200); // keep the follow push muted for the whole hunt
     container.scrollTo({ top, behavior: 'auto' });
-    await wait(stalled >= 2 ? 450 : 190);
+    await wait(210);
 
     const hit = document.querySelector<HTMLElement>(sel);
     if (hit) return hit;

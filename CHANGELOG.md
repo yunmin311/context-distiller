@@ -5,6 +5,20 @@ All notable changes to Context Distiller are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.7] — 2026-10-25
+
+### Fixed
+- **定位恢复（v1.3.0 算法逐字移植 + 正确锚点）**：v1.4.6 用 `data-turn-key` 做锚点是错的——实测它
+  与后端消息 id 是两个命名空间。真正的锚点是回合元素上的 `data-chatgpt-search-message-ids`
+  （空格分隔的后端消息 id 列表，`~=` 词匹配）。定位/寻址/跟随全部切到该锚点。
+- **滚动算法回归 v1.3.0 原版**（用户指令：不再重写）：`seekToMessage`/`scrollToMessage` 与 v1.3.0
+  逐字一致（步长 0.8 屏、等待 210ms、40 步预算、240/480/900ms 三次落点补偿、follow muting 窗口），
+  机械 diff 验证仅选择器不同。撤销 v1.4.x 的全部自行偏离（停滞等待、时间上限、失败回原位、
+  atBottom/forceSnap 条件化落点——恢复「每次读取落最新」）。
+
+### Verified
+- 登录态 E2E 首次全绿：读取首行 1.0s、稳定 6.1s、**定位真实滚动到目标消息（PASS）**。
+
 ## [1.4.6] — 2026-10-24
 
 ### Fixed

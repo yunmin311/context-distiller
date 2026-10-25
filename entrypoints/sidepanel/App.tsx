@@ -318,7 +318,6 @@ export function App() {
         if (!domFirst) {
           // User-invoked read: skip the gate's gap window (their click IS the
           // authorization) — the gate still prevents overlap.
-          forceSnapRef.current = true;
         }
         if (forceBackend) {
           // Immediate, unmistakable feedback: this read goes straight to the
@@ -376,7 +375,6 @@ export function App() {
   // "重试" reloads the page for the user and reads again (restored in 1.4.1 —
   // empirically the only thing that fixes a stale long-lived ChatGPT tab).
   const handleRetry = useCallback(async () => {
-    forceSnapRef.current = true; // an explicit retry lands on the latest
     const res = await actions.retryRead();
     if (res.ok) {
       setToast({
@@ -397,7 +395,6 @@ export function App() {
     if (deepLoadingRef.current) return;
     deepLoadingRef.current = true;
     const startUrl = conversationUrlRef.current;
-    forceSnapRef.current = true; // the user asked for the whole thread — land on it
     setToast({ text: t('toast.deepStart'), tone: 'ok' });
     try {
       // Jump the page to its oldest message first.
@@ -427,7 +424,6 @@ export function App() {
       // Walk done: ONE normal (backend) read to finish — if the endpoint has
       // recovered it replaces the merged list with the authoritative full thread;
       // if it is still throttled the merged walk result stays on screen.
-      forceSnapRef.current = true;
       await actions.loadConversation(true, { background: true, merge: true, force: true });
       setToast({
         text: t('toast.deepDone', { count: latestRef.current.messages.length }),
@@ -488,7 +484,6 @@ export function App() {
       const currentId = conversationUrlRef.current ? convId(conversationUrlRef.current) : null;
       if (newId === currentId) return;
       const reRead = () => {
-        forceSnapRef.current = true; // a switched-in conversation lands on its latest
         void handleLoad(true, { domOnlyFirst: true });
       };
       reRead();
@@ -508,28 +503,15 @@ export function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [handleLoad, state.conversation?.url]);
 
-  // Viewport policy (v1.4) — the panel must never yank itself while the user
-  // reads. Growth re-reads declare an anchor / preserve intent (set in
-  // snapIntentRef above): the viewport is ANCHORED to the row they were
-  // reading, or their exact scroll offset is preserved. The bottom snap fires
-  // only when the user ASKED for the read (manual refresh / retry / deep-load
-  // finish / conversation switch set forceSnapRef) or when they were already
-  // reading at the bottom; background polls and upgrades keep the viewport.
+  // Viewport policy — ported VERBATIM from v1.3.0 (user verdict): every
+  // successful read lands the list on its LATEST message, INSTANTLY — except
+  // growth re-reads, where the viewport is ANCHORED to the row the user was
+  // reading (or their exact offset is preserved). Callers declare intent in
+  // snapIntentRef; the effect consumes it.
   const mainRef = useRef<HTMLElement | null>(null);
   const snapIntentRef = useRef<
     'bottom' | { anchor: string } | { preserve: { top: number; sh: number } }
   >('bottom');
-  const atBottomRef = useRef(true);
-  const forceSnapRef = useRef(true); // the very first read lands on the latest
-  useEffect(() => {
-    const el = mainRef.current;
-    if (!el) return;
-    const onScroll = () => {
-      atBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
-    };
-    el.addEventListener('scroll', onScroll, { passive: true });
-    return () => el.removeEventListener('scroll', onScroll);
-  }, []);
   useEffect(() => {
     if (state.status !== 'ready' || state.messages.length === 0) return;
     const el = mainRef.current;
@@ -549,10 +531,7 @@ export function App() {
       el.scrollTop = intent.preserve.top + (el.scrollHeight - intent.preserve.sh);
       return;
     }
-    if (forceSnapRef.current || atBottomRef.current) {
-      forceSnapRef.current = false;
-      el.scrollTop = el.scrollHeight;
-    }
+    el.scrollTop = el.scrollHeight;
   }, [state.status, state.messages]);
 
   // Marked messages (读时标记) still present in the read conversation, compiled

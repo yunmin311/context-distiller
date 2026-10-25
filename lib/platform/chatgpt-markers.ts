@@ -84,8 +84,13 @@ export const THEME_ACCENT_VARS = [
 /** One conversation turn in the new shell. */
 export const TURN_SELECTOR = '[data-turn-key]';
 
-/** The new shell's message-id attribute (same UUID namespace as the backend). */
-export const TURN_KEY_ATTR = 'data-turn-key';
+/**
+ * The new shell's MESSAGE-ID anchor: a space-separated list of backend message
+ * ids on each turn (E2E-verified: the panel's backend ids appear verbatim in
+ * these lists). `data-turn-key` is a DIFFERENT id namespace (turn key, not
+ * message id) and must not be used to match backend ids.
+ */
+export const TURN_MESSAGE_IDS_ATTR = 'data-chatgpt-search-message-ids';
 
 /** Role attribute on the sr-only heading inside assistant turns. */
 export const TURN_ROLE_ATTR = 'data-conversation-role';
@@ -97,9 +102,12 @@ export const TURN_COMPLETE_STATE = 'complete';
 /** The conversation scroller in the new shell. */
 export const THREAD_SCROLL_SELECTOR = '.thread-scroll-container';
 
+/** All elements that can anchor a backend message id, either shell. */
+export const MESSAGE_ANCHOR_SELECTOR = `[${TURN_MESSAGE_IDS_ATTR}], [${MESSAGE_ID_ATTR}]`;
+
 /** Selector matching a message by id in EITHER the new shell or the legacy DOM. */
 export const messageByAnyIdSelector = (id: string): string =>
-  `[data-turn-key="${CSS.escape(id)}"], [data-chatgpt-selection-message-id="${CSS.escape(id)}"], [data-message-id="${CSS.escape(id)}"]`;
+  `[data-chatgpt-search-message-ids~="${CSS.escape(id)}"], [data-message-id="${CSS.escape(id)}"]`;
 
 // --- React internals (main world only) ----------------------------------------
 

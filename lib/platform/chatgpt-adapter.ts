@@ -9,7 +9,7 @@ import {
   SEND_BUTTON_SELECTOR,
   TITLE_NAV_SELECTOR,
   TITLE_SUFFIX_RE,
-  TURN_KEY_ATTR,
+  TURN_MESSAGE_IDS_ATTR,
   TURN_ROLE_ATTR,
   TURN_SELECTOR,
   messageByIdSelector,
@@ -70,13 +70,15 @@ export const chatgptAdapter: PlatformAdapter = {
     });
     if (out.length > 0) return out;
 
-    // New app-shell: turns carry data-turn-key (= the message UUID); the role
-    // lives on an sr-only heading INSIDE assistant turns (user turns have none
-    // → default). The sr-only heading text must not leak into the turn text.
+    // New app-shell: each turn lists its backend message ids in
+    // data-chatgpt-search-message-ids (space-separated); the role lives on an
+    // sr-only heading INSIDE assistant turns (user turns have none → default).
+    // The sr-only heading text must not leak into the turn text.
     document.querySelectorAll<HTMLElement>(TURN_SELECTOR).forEach((turn) => {
       const roleHeading = turn.querySelector<HTMLElement>(`[${TURN_ROLE_ATTR}]`);
       const role = roleHeading?.getAttribute(TURN_ROLE_ATTR) ?? 'user';
-      const id = turn.getAttribute(TURN_KEY_ATTR) ?? undefined;
+      const firstId = (turn.getAttribute(TURN_MESSAGE_IDS_ATTR) || '').split(/\s+/)[0];
+      const id = firstId || undefined;
       const headingText = roleHeading?.innerText ?? '';
       const text = (turn.innerText ?? '').replace(headingText, '').trim();
       if (text) out.push({ id, role, text, source: 'dom' });
