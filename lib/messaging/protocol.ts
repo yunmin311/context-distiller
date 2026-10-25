@@ -61,6 +61,7 @@ export type ErrorCode =
   | 'err.unknownRequest'
   | 'err.scrollNotFound'
   | 'err.scrollWhileGenerating'
+  | 'err.scrollGeneric'
   | 'err.focusChatgptTab'
   | 'err.reloadNoMessages';
 

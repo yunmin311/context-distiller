@@ -662,6 +662,37 @@ try {
             );
           }
           check('locate scrolls the page to the message', located, `mid=${lastMid.slice(0, 12)}…`);
+          // SCROLL STABILITY: the reported twitch was a post-locate fight
+          // (smooth CSS / scroll anchoring / overlapping seeks) — the element
+          // assertion alone never caught it. Watch the scroller for 8s: the
+          // position must SETTLE (no sustained drift, no oscillation storm).
+          if (located) {
+            const stab = await evalIn(
+              chat,
+              `(async () => {
+                const c = document.querySelector('.thread-scroll-container') ||
+                  document.scrollingElement;
+                const series = [];
+                for (let i = 0; i < 16; i++) {
+                  series.push(Math.round(c.scrollTop));
+                  await new Promise((r) => setTimeout(r, 500));
+                }
+                const drift = Math.abs(series[series.length - 1] - series[8]);
+                let reversals = 0;
+                for (let i = 2; i < series.length; i++) {
+                  const a = series[i] - series[i - 1], b = series[i - 1] - series[i - 2];
+                  if (a * b < 0 && Math.abs(a) > 15 && Math.abs(b) > 15) reversals += 1;
+                }
+                return { series, drift, reversals };
+              })()`,
+            );
+            const stable = stab.drift <= 300 && stab.reversals <= 3;
+            check(
+              'post-locate scroll stability (no twitch/drift)',
+              stable,
+              `drift=${stab.drift}px reversals=${stab.reversals} tail=[${stab.series.slice(-6).join(',')}]`,
+            );
+          }
           }
         }
       }

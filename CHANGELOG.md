@@ -5,6 +5,22 @@ All notable changes to Context Distiller are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.8] — 2026-10-25
+
+### Fixed
+- **定位后页面抽搐（用户实测报告的严重问题）**：三个标准稳定器——
+  ①**定位操作串行化**：连点不再叠加多条寻址行走 + 补偿循环互相打架（新壳下定位耗时变长，
+  v1.3 从未暴露此窗口）；
+  ②**程序化滚动期间压制 CSS 平滑滚动与浏览器滚动锚定**（`scroll-behavior:auto` +
+  `overflow-anchor:none`，操作后恢复）——新壳的这两个机制会把 210ms 步进变成动画叠加、
+  并在虚拟器增删回合时反向拉拽 scrollTop（「跳回来」「一点点抽到最底部」的机制）；
+  ③静默窗口覆盖落点稳定尾部。
+- deep load walk 同样应用动力学压制。
+
+### Verified
+- E2E 新增**定位后滚动稳定性断言**（8 秒 scrollTop 时间线：漂移 ≤300px、方向反转 ≤3 次）——
+  本轮实测 drift=0px / reversals=0。此断言永久留在套件里，抽搐类回归今后会被自动抓住。
+
 ## [1.4.7] — 2026-10-25
 
 ### Fixed

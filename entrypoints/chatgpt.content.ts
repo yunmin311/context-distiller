@@ -562,6 +562,7 @@ const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
  */
 async function deepWalkStep(toTop: boolean): Promise<PanelResponse> {
   const container = findScrollContainer();
+  const restoreDynamics = suppressScrollDynamics(container);
   const maxTop = () => Math.max(0, container.scrollHeight - container.clientHeight);
   beginProgrammaticScroll(2000);
   if (toTop) {
@@ -577,6 +578,7 @@ async function deepWalkStep(toTop: boolean): Promise<PanelResponse> {
   await sleep(380);
   const after = container.scrollTop;
   const reachedEnd = after >= maxTop() - 4 || after <= before + 2;
+  restoreDynamics();
   return { kind: 'deep-walk', ok: true, reachedEnd };
 }
 
@@ -590,11 +592,60 @@ async function deepWalkStep(toTop: boolean): Promise<PanelResponse> {
  * toward its position (binary-searched using the full ordered id list) until it
  * mounts. If it still can't be found, we say so instead of guessing.
  */
+/**
+ * Scroll-stability suppressors for programmatic scrolling on the NEW shell.
+ *
+ * The v1.3.0 algorithm is ported verbatim, but the new app shell adds two
+ * dynamics the old DOM never had, and both fight programmatic scrolling:
+ *   1. CSS smooth scrolling — every container.scrollTo becomes an animated
+ *      glide; the seek's 210ms steps then overlap into the "twitching" the
+ *      user reported.
+ *   2. Browser scroll anchoring — when the virtualizer mounts/unmounts turns
+ *      mid-seek, the browser adjusts scrollTop to keep its anchor visible,
+ *      yanking the page BACK while the seek is walking.
+ * Both are suppressed for the duration of every programmatic operation and
+ * restored afterwards. Locates are also SERIALIZED: overlapping operations
+ * (the user clicking again while a seek glides) each spawn a walk + a
+ * compensation loop that fight each other — v1.3 never exposed this because
+ * its locates were instant.
+ */
+function suppressScrollDynamics(container: HTMLElement): () => void {
+  const prevBehavior = container.style.scrollBehavior;
+  const prevAnchor = container.style.overflowAnchor;
+  container.style.scrollBehavior = 'auto';
+  container.style.overflowAnchor = 'none';
+  let restored = false;
+  return () => {
+    if (restored) return;
+    restored = true;
+    container.style.scrollBehavior = prevBehavior;
+    container.style.overflowAnchor = prevAnchor;
+  };
+}
+
+let locateInFlight = false;
+
 async function scrollToMessage(messageId: string, orderedIds?: string[]): Promise<PanelResponse> {
+  // SERIALIZED: a second locate while one is still gliding/compensating would
+  // start a competing walk + compensation loop — the reported "page twitching
+  // back and forth". v1.3 never hit this because its locates were instant.
+  if (locateInFlight) {
+    beginProgrammaticScroll(1200);
+    return {
+      kind: 'scroll-result',
+      ok: false,
+      error: '上一次定位还在进行中，请等它停下后再点。',
+      code: 'err.scrollGeneric',
+    };
+  }
+  locateInFlight = true;
   // Ported VERBATIM from v1.3.0 (user verdict: the old locate was the product's
   // best feature — do not redesign it). Only the anchor selector is dual-mode
-  // (new-shell turn keys + legacy data-message-id).
+  // (new-shell turn keys + legacy data-message-id) and scroll dynamics are
+  // suppressed for the whole operation.
   const sel = messageByAnyIdSelector(messageId);
+  const container = findScrollContainer();
+  const restoreDynamics = suppressScrollDynamics(container);
   // Mute the follow push for the whole operation (extended by each seek step).
   beginProgrammaticScroll(2000);
   let el = document.querySelector<HTMLElement>(sel);
@@ -603,13 +654,15 @@ async function scrollToMessage(messageId: string, orderedIds?: string[]): Promis
     // settled yet (heights still being measured), which is why it used to take a
     // few clicks. Run the seek, and if it comes up empty, run it once more — the
     // first pass leaves the list warmed up and measured, so the retry lands.
-    el = await seekToMessage(messageId, orderedIds);
+    el = await seekToMessage(messageId, orderedIds, container);
     if (!el) {
       await new Promise<void>((r) => setTimeout(r, 200));
-      el = await seekToMessage(messageId, orderedIds);
+      el = await seekToMessage(messageId, orderedIds, container);
     }
   }
   if (!el) {
+    restoreDynamics();
+    locateInFlight = false;
     return {
       kind: 'scroll-result',
       ok: false,
@@ -635,6 +688,9 @@ async function scrollToMessage(messageId: string, orderedIds?: string[]): Promis
       }
       if (delay === 900) flashElement(cur);
     }
+    beginProgrammaticScroll(600); // cover the tail of the last settle pass
+    restoreDynamics();
+    locateInFlight = false;
   })();
   return { kind: 'scroll-result', ok: true };
 }
@@ -781,10 +837,13 @@ function findScrollContainer(): HTMLElement {
  * position, using the mounted messages we CAN map to an order as feedback to
  * binary-search toward the target. Bounded so it can't scroll forever.
  */
-async function seekToMessage(messageId: string, orderedIds: string[]): Promise<HTMLElement | null> {
+async function seekToMessage(
+  messageId: string,
+  orderedIds: string[],
+  container: HTMLElement,
+): Promise<HTMLElement | null> {
   const targetOrder = orderedIds.indexOf(messageId);
   if (targetOrder < 0) return null;
-  const container = findScrollContainer();
   const orderOf = new Map(orderedIds.map((id, i) => [id, i] as const));
   const sel = messageByAnyIdSelector(messageId);
   const wait = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
